@@ -1,0 +1,31 @@
+[project]
+name = "cellactivityrecodingsimulater"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "void1211", email = "g2154488@cc.kyoto-su.ac.jp" }
+]
+dependencies = [
+    "pydantic>=2.11.7",
+    "numpy>=2.2.6",
+    "matplotlib>=3.10.3",
+]
+readme = "README.md"
+requires-python = ">= 3.10"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cellactivityrecodingsimulater"]
+
+[tool.rye.scripts]
+main = "python src/cellactivityrecodingsimulater/main.py"

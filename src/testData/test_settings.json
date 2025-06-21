@@ -1,0 +1,27 @@
+{
+    "pathCell": "testData/test_cells.json",
+    "pathSite": "testData/test_sites.json",
+    "pathSaveDir": "testData/test_save",
+
+    "fs": 1000,
+    "duration": 10,
+
+    "avgSpikeRate": 10,
+    "isRefractory": true,
+    "refractoryPeriod": 10,
+
+    "noiseType": "gaussian",
+    "noiseAmp": 10,
+    "pathTruthNoise": "testData/test_truth_noise.json",
+    "pathSitesOfTruthNoise": "testData/test_sites_of_truth_noise.json",
+
+    "spikeType": "gabor",
+    "pathSpikeList": "testData/test_spikeTemps.npy",
+    "isRandomSelect": true,
+    "gaborSigmaList": [1, 2, 3],
+    "gaborf0List": [1, 2, 3],
+    "gaborthetaList": [1, 2, 3],
+    "spikeWidth": 4,
+    "spikeAmp": 10,
+    "attenTime": 10
+}
