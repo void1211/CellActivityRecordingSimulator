@@ -8,12 +8,12 @@ def main():
     project_root = tools.getProjectRoot()
 
     # 設定ファイルの読み込み
-    settings = carsIO.load_settings(project_root /"src"/ "testData" / "test_settings.json")
+    settings = carsIO.load_settings(project_root / "tests" / "data" / "test_settings.json")
     
     # セルデータの読み込み
-    cells = carsIO.load_cells(project_root / "src" / settings.pathCell)
+    cells = carsIO.load_cells(project_root / "tests" / "data" / settings.pathCell.name)
     # サイトデータの読み込み
-    sites = carsIO.load_sites(project_root / "src" / settings.pathSite)
+    sites = carsIO.load_sites(project_root / "tests" / "data" / settings.pathSite.name)
     
     if settings.noiseType == "truth":
         for site in sites:
@@ -30,20 +30,15 @@ def main():
     # スパイクテンプレートの読み込み
     if settings.spikeType == "gabor":
         spikeTemplates = [tools.simulateSpikeTemplate(settings) for _ in range(len(cells))]
-    else:
+    elif settings.spikeType == "templates":
         spikeTemplates = carsIO.load_spikeTemplates(project_root / "src" / settings.pathSpikeList)
+    else:
+        raise ValueError(f"Invalid spike type: {settings.spikeType}")
 
     # 各セルの処理
     for i, cell in enumerate(cells):
-        spikeTimes = tools.simulateSpikeTimes(cell, settings)
-        cell.spikeTimeList = spikeTimes
-        if settings.spikeType == "gabor":
-            cell.spikeTemp = tools.simulateSpikeTemplate(settings)
-        else: 
-            if settings.isRandomSelect:
-                cell.spikeTemp = spikeTemplates[np.random.randint(0, len(spikeTemplates))]
-            else:
-                cell.spikeTemp = spikeTemplates[i]
+        cell.spikeTimeList = tools.simulateSpikeTimes(cell, settings)
+        cell.spikeTemp = spikeTemplates[i]
 
     for site in sites:
         site.signalRaw = site.signalNoise.copy()
@@ -52,19 +47,13 @@ def main():
             tools.addSpikeToSignal(cell, site)
 
     # データの保存
-    pathSaveDir = project_root / "src" / settings.pathSaveDir
+    pathSaveDir = project_root / "tests" / "data" / settings.pathSaveDir
     pathSaveDir.mkdir(parents=True, exist_ok=True)
     carsIO.save_data(pathSaveDir, cells, sites)
 
+    # データの表示
     plt.plot(sites[0].signalRaw)
     plt.show()
-
-    plt.plot(sites[0].signalNoise)
-    plt.show()
-
-
-    
-    
 
 if __name__ == "__main__":
     main()
