@@ -1,5 +1,5 @@
 from pathlib import Path
-
+import logging
 import numpy as np
 
 from Cell import Cell
@@ -10,7 +10,7 @@ def getProjectRoot() -> Path:
     """プロジェクトのルートディレクトリを取得する"""
     return Path(__file__).resolve().parents[2]
 
-def simulateSpikeTimes(cell: Cell, settings: Settings) -> list[int]:
+def simulateSpikeTimes(settings: Settings) -> list[int]:
     """セルのスパイク時間をシミュレートする"""
     duration = settings.duration
     fs = settings.fs
@@ -35,7 +35,7 @@ def simulateRecordingNoise(settings: Settings, noiseType: str) -> list[float]:
     noiseAmp = settings.noiseAmp
 
     if noiseType == "gaussian":
-        noise = np.random.normal(0, noiseAmp, size=int(duration * fs))
+        noise = np.random.normal(-noiseAmp, noiseAmp, size=int(duration * fs))
     elif noiseType == "truth":
         noise = np.loadtxt(settings.pathTruthNoise)
     else:
@@ -56,20 +56,26 @@ def addSpikeToSignal(cell: Cell, site: Site) -> list[float]:
     spikeTemp = cell.spikeTemp
     peak = np.argmax(np.abs(spikeTemp))
     for spikeTime, spikeAmp in zip(spikeTimes, spikeAmpList):
-        start = spikeTime - peak
-        end = start + len(spikeTemp)
+        start = int(spikeTime - peak)
+        end = int(start + len(spikeTemp))
         if not (0 <= start and end <= len(signal)):
             continue
         signal[start:end] += spikeAmp * spikeTemp
     site.signalRaw = signal
     return signal
     
+def calcSpikeAmp(settings: Settings) -> list[float]:
+    """スパイク振幅を計算する"""
+    ampMax = settings.spikeAmpMax
+    ampMin = settings.spikeAmpMin
+    amp = np.random.uniform(ampMin, ampMax)
+    return amp
+
 def calcScaledSpikeAmp(cell: Cell, site: Site, settings: Settings) -> list[float]:
     """スパイク振幅をスケーリングする"""
     spikeAmpList = cell.spikeAmpList
     d = calcDistance(cell, site)
     scaledSpikeAmpList = spikeAmpList / (d / settings.attenTime + 1)**2
-    cell.spikeAmpList = scaledSpikeAmpList
     return scaledSpikeAmpList
 
 def calcDistance(cell: Cell, site: Site) -> float:
@@ -87,7 +93,7 @@ def simulateSpikeTemplate(settings: Settings) -> list[np.ndarray]:
 
 def gabor(sigma: float, f0: float, theta: float, fs: float, spikeWidth: float) -> np.ndarray:
     """ガボール関数を生成する"""
-    x = np.linspace(-spikeWidth / 2, spikeWidth / 2, int(spikeWidth * fs))
+    x = np.linspace(-spikeWidth / 2, spikeWidth / 2, int(spikeWidth * fs / 1000))
     y = np.exp(-x**2 / (2 * sigma**2)) * np.cos(2 * np.pi * f0 * x + theta)
     y = y / np.max(np.abs(y))
     return y

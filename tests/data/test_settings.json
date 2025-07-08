@@ -3,14 +3,14 @@
     "pathSite": "test_sites.json",
     "pathSaveDir": "test_save",
 
-    "fs": 1000,
+    "fs": 30000,
     "duration": 10,
 
     "avgSpikeRate": 10,
     "isRefractory": true,
     "refractoryPeriod": 10,
 
-    "noiseType": "none",
+    "noiseType": "gaussian",
     "noiseAmp": 10,
     "pathTruthNoise": "test_truth_noise.json",
     "pathSitesOfTruthNoise": "test_sites_of_truth_noise.json",
@@ -22,6 +22,7 @@
     "gaborf0List": [1, 2, 3],
     "gaborthetaList": [1, 2, 3],
     "spikeWidth": 4,
-    "spikeAmp": 10,
-    "attenTime": 10
+    "spikeAmpMax": 100,
+    "spikeAmpMin": 90,
+    "attenTime": 25
 }
