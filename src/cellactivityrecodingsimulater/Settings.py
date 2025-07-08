@@ -25,6 +25,7 @@ class Settings(BaseModel):
     gaborf0List: list[float]
     gaborthetaList: list[float]
     spikeWidth: float # msec
-    spikeAmp: float # uV
+    spikeAmpMax: float # uV
+    spikeAmpMin: float # uV
     attenTime: float # msec
 

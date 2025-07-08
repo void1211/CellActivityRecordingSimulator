@@ -47,11 +47,14 @@ def main():
             logging.info("テンプレートスパイクテンプレートを読み込み")
         else:
             raise ValueError(f"Invalid spike type: {settings.spikeType}")
-
+        
         # 各セルの処理
         for i, cell in enumerate(cells):
-            cell.spikeTimeList = tools.simulateSpikeTimes(cell, settings)
+            cell.spikeTimeList = tools.simulateSpikeTimes(settings)
             cell.spikeTemp = spikeTemplates[i]
+            for t in cell.spikeTimeList:
+                cell.spikeAmpList.append(tools.calcSpikeAmp(settings))
+            logging.info(f"セル{i}のスパイク: {cell.spikeTemp[0:10]}")
         logging.info("各セルのスパイク時刻・テンプレートを設定")
 
         for site in sites:
