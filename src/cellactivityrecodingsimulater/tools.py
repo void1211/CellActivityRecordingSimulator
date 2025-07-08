@@ -1,6 +1,7 @@
 from pathlib import Path
 import logging
 import numpy as np
+from scipy.signal import butter, filtfilt
 
 from Cell import Cell
 from Site import Site
@@ -97,3 +98,9 @@ def gabor(sigma: float, f0: float, theta: float, fs: float, spikeWidth: float) -
     y = np.exp(-x**2 / (2 * sigma**2)) * np.cos(2 * np.pi * f0 * x + theta)
     y = y / np.max(np.abs(y))
     return y
+
+def getFilteredSignal(signal: np.ndarray, fs: float, lowCutoffFreq: float, highCutoffFreq: float) -> np.ndarray:
+    """信号をバンドパスフィルタリングする"""
+    b, a = butter(2, [lowCutoffFreq / (fs / 2), highCutoffFreq / (fs / 2)], btype='bandpass')
+    filteredSignal = filtfilt(b, a, signal)
+    return filteredSignal

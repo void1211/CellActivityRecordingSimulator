@@ -41,8 +41,25 @@ def load_spikeTemplates(path: Path) -> list[np.ndarray]:
 def save_data(path: Path, cells: list[Cell], sites: list[Site]):
     signalRaw = np.array([site.signalRaw for site in sites])
     signalNoise = np.array([site.signalNoise for site in sites])
+    signalFiltered = np.array([site.signalFiltered for site in sites])
     
+    # 異なる長さのリストをobject型で保存
+    spikeTimeList = np.array([cell.spikeTimeList for cell in cells], dtype=object)
+    spikeAmpList = np.array([cell.spikeAmpList for cell in cells], dtype=object)
+    spikeTemp = np.array([cell.spikeTemp for cell in cells], dtype=object)
+
     np.save(path / "signalRaw.npy", signalRaw)
     np.save(path / "signalNoise.npy", signalNoise)
-
+    np.save(path / "signalFiltered.npy", signalFiltered)
+    np.save(path / "spikeTimeList.npy", spikeTimeList)
+    np.save(path / "spikeAmpList.npy", spikeAmpList)
+    np.save(path / "spikeTemp.npy", spikeTemp)
+    
+    # バイナリファイルに保存
+    with open(path / "signalRaw.bin", "wb") as f:
+        signalRaw.flatten().tofile(f)
+    with open(path / "signalNoise.bin", "wb") as f:
+        signalNoise.flatten().tofile(f)
+    with open(path / "signalFiltered.bin", "wb") as f:
+        signalFiltered.flatten().tofile(f)
     

@@ -57,11 +57,13 @@ def main():
             logging.info(f"セル{i}のスパイク: {cell.spikeTemp[0:10]}")
         logging.info("各セルのスパイク時刻・テンプレートを設定")
 
+        # 信号生成
         for site in sites:
             site.signalRaw = site.signalNoise.copy()
             for cell in cells:
                 tools.calcScaledSpikeAmp(cell, site, settings)
                 tools.addSpikeToSignal(cell, site)
+            site.signalFiltered = tools.getFilteredSignal(site.signalRaw, settings.fs, 300, 3000)
         logging.info("信号生成完了")
 
         # データの保存
