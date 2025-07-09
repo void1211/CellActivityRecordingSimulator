@@ -39,6 +39,10 @@ def load_spikeTemplates(path: Path) -> list[np.ndarray]:
     return spikeTemplates
 
 def save_data(path: Path, cells: list[Cell], sites: list[Site]):
+
+    # todo ファイル名を設定できるようにする
+    # todo 必要事項全て保存できるようにする
+    
     signalRaw = np.array([site.signalRaw for site in sites])
     signalNoise = np.array([site.signalNoise for site in sites])
     signalFiltered = np.array([site.signalFiltered for site in sites])
