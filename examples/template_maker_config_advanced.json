@@ -1,0 +1,62 @@
+{
+  "input": {
+    "templates_path": "templates.npy",
+    "scale_to_max_one": true
+  },
+  "filters": {
+    "distance": {
+      "max_distance": 1.5,
+      "min_distance": 0.1,
+      "method": "cosine",
+      "reference_cluster": 0
+    },
+    "amplitude": {
+      "min_amplitude": 0.5,
+      "max_amplitude": 5.0
+    },
+    "electrode": {
+      "min_electrodes": 2,
+      "max_electrodes": 8
+    },
+    "custom": {
+      "conditions": [
+        {
+          "type": "peak_amplitude_above_mean",
+          "multiplier": 1.2
+        },
+        {
+          "type": "primary_electrode_in_range",
+          "min_electrode": 0,
+          "max_electrode": 5
+        }
+      ]
+    },
+    "apply_order": ["distance", "amplitude", "electrode", "custom"]
+  },
+  "analysis": {
+    "enabled": true,
+    "save_analysis": "advanced_analysis_results.npz"
+  },
+  "plot": {
+    "enabled": true,
+    "max_clusters": 15,
+    "save_plots": "plots/"
+  },
+  "output": {
+    "save_filtered": "advanced_filtered_templates.npy",
+    "save_analysis": "advanced_analysis_results.npz",
+    "save_plots": "plots/",
+    "verbose": true
+  },
+  "metadata": {
+    "description": "高度なTemplateMaker設定ファイル",
+    "version": "1.0.0",
+    "created_by": "TemplateMaker",
+    "notes": "コサイン距離1.5以下、基準クラスタ0との距離0.1以上、振幅0.5-5.0、電極数2-8、カスタム条件付き、スケーリング有効",
+    "experiment": {
+      "name": "advanced_filtering_experiment",
+      "date": "2024-01-01",
+      "researcher": "researcher_name"
+    }
+  }
+} 

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from Site import Site
 from Cell import Cell
 from Settings import Settings
+
 def load_settings(path: str) -> Settings:
     with open(path, "r") as f:
         return Settings(**json.load(f))
@@ -52,18 +53,61 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site]):
     spikeAmpList = np.array([cell.spikeAmpList for cell in cells], dtype=object)
     spikeTemp = np.array([cell.spikeTemp for cell in cells], dtype=object)
 
-    np.save(path / "signalRaw.npy", signalRaw)
-    np.save(path / "signalNoise.npy", signalNoise)
-    np.save(path / "signalFiltered.npy", signalFiltered)
-    np.save(path / "spikeTimeList.npy", spikeTimeList)
-    np.save(path / "spikeAmpList.npy", spikeAmpList)
-    np.save(path / "spikeTemp.npy", spikeTemp)
+    # 浮動小数点データをint16に変換
+    signalRaw_int16 = signalRaw.astype(np.int16)
+    signalNoise_int16 = signalNoise.astype(np.int16)
+    signalFiltered_int16 = signalFiltered.astype(np.int16)
     
-    # バイナリファイルに保存
+    # int16データを.npyファイルとして保存
+    np.save(path / "signalRaw_int16.npy", signalRaw_int16)
+    np.save(path / "signalNoise_int16.npy", signalNoise_int16)
+    np.save(path / "signalFiltered_int16.npy", signalFiltered_int16)
+    
+    # バイナリファイルに保存（int16）
     with open(path / "signalRaw.bin", "wb") as f:
-        signalRaw.flatten().tofile(f)
+        signalRaw_int16.flatten().tofile(f)
     with open(path / "signalNoise.bin", "wb") as f:
-        signalNoise.flatten().tofile(f)
+        signalNoise_int16.flatten().tofile(f)
     with open(path / "signalFiltered.bin", "wb") as f:
-        signalFiltered.flatten().tofile(f)
+        signalFiltered_int16.flatten().tofile(f)
+
+    cell_ids = np.array([cell.id for cell in cells])
+    cell_positions = np.array([[cell.x, cell.y, cell.z] for cell in cells])
+    spike_times = np.array([cell.spikeTimeList for cell in cells], dtype=object)
+    spike_amps = np.array([cell.spikeAmpList for cell in cells], dtype=object)
+    spike_temps = np.array([cell.spikeTemp for cell in cells], dtype=object)
+    
+    site_ids = np.array([site.id for site in sites])
+    site_positions = np.array([[site.x, site.y, site.z] for site in sites])
+
+    with open(path / "cell_ids.npy", "wb") as f:
+        cell_ids.tofile(f)
+    with open(path / "cell_positions.npy", "wb") as f:
+        cell_positions.tofile(f)
+    with open(path / "spike_times.npy", "wb") as f:
+        spike_times.tofile(f)
+    with open(path / "spike_amplitudes.npy", "wb") as f:
+        spike_amps.tofile(f)
+    with open(path / "spike_templates.npy", "wb") as f:
+        spike_temps.tofile(f)
+
+    with open(path / "site_ids.npy", "wb") as f:
+        site_ids.tofile(f)
+    with open(path / "site_positions.npy", "wb") as f:
+        site_positions.tofile(f)
+
+    # 互換性のために, 別ファイル名でも保存
+    with open(path / "fire_times.npy", "wb") as f:
+        spike_times.tofile(f)
+
+    with open(path / "raw.bin", "wb") as f:
+        signalRaw_int16.flatten().tofile(f)
+    with open(path / "noise.bin", "wb") as f:
+        signalNoise_int16.flatten().tofile(f)
+    with open(path / "filt.bin", "wb") as f:
+        signalFiltered_int16.flatten().tofile(f)
+
+    
+
+
     

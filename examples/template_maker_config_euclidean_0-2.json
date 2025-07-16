@@ -1,0 +1,47 @@
+{
+  "input": {
+    "templates_path": "/Users/rei/Research/myKilosort/ZFM-02370_mini.imec0.ap/kilosort4/templates.npy",
+    "scale_to_max_one": true
+  },
+  "filters": {
+    "distance": {
+      "max_distance": 2.0,
+      "min_distance": 0.0,
+      "method": "euclidean",
+      "reference_cluster": null
+    },
+    "amplitude": {
+      "min_amplitude": 0.1,
+      "max_amplitude": 10.0
+    },
+    "electrode": {
+      "min_electrodes": 1,
+      "max_electrodes": 10
+    },
+    "custom": {
+      "conditions": []
+    },
+    "apply_order": ["distance"]
+  },
+  "analysis": {
+    "enabled": true,
+    "save_analysis": "analysis_results.npz"
+  },
+  "plot": {
+    "enabled": false,
+    "max_clusters": 10,
+    "save_plots": null
+  },
+  "output": {
+    "save_filtered": "src/data/sptemp/filtered_templates_euclidean_0-2.npy",
+    "save_analysis": "src/data/sptemp/analysis_results.npz",
+    "save_plots": null,
+    "verbose": true
+  },
+  "metadata": {
+    "description": "ユークリッド距離でフィルタリング",
+    "version": "1.0.0",
+    "created_by": "TemplateMaker",
+    "notes": "ユークリッド距離0.0-2.0の条件でフィルタリング"
+  }
+} 
