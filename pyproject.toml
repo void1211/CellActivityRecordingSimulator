@@ -29,4 +29,4 @@ allow-direct-references = true
 packages = ["src/cellactivityrecodingsimulater"]
 
 [tool.rye.scripts]
-main = "python src/cellactivityrecodingsimulater/main.py"
+main = "python main.py -ed /Users/rei/Research/実験関係/実験条件/ex-1"
