@@ -17,10 +17,10 @@ def parse_args():
         help='Path to example directory. Can also be set via EXAMPLE_DIR env var.'
     )
     parser.add_argument(
-        '--settings', '-s',
+        '--conditions', '-c',
         type=str,
-        default='*.json',
-        help='Settings file pattern (default: *.json)'
+        default='*',
+        help='Condition folder pattern (default: *)'
     )
     parser.add_argument(
         '--no-plot',
@@ -45,4 +45,4 @@ from cellactivityrecodingsimulater.main import main
 
 if __name__ == "__main__":
     args = parse_args()
-    main(example_dir=args.example_dir, settings_pattern=args.settings, show_plot=not args.no_plot) 
+    main(example_dir=args.example_dir, condition_pattern=args.conditions, show_plot=not args.no_plot) 
