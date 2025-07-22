@@ -24,8 +24,8 @@ pip install -r requirements-dev.lock
 # 基本的な実行
 python main.py --example-dir 実験条件/ex-1
 
-# 特定の設定ファイルパターンを指定
-python main.py --example-dir 実験条件/ex-1 --settings "condition*.json"
+# 特定の条件フォルダパターンを指定
+python main.py --example-dir 実験条件/ex-1 --conditions "condition*"
 
 # プロット表示を無効化
 python main.py --example-dir 実験条件/ex-1 --no-plot
@@ -37,13 +37,13 @@ python main.py
 
 ### 設定ファイルの例
 
-実験条件の設定ファイル（`実験条件/ex-1/settings/condition1.json`）:
+条件フォルダ内の設定ファイル（`実験条件/ex-1/condition1/settings.json`）:
 
 ```json
 {
     "name": "2025_ex-1_condition1",
-    "pathCell": "condition1.json",
-    "pathSite": "condition1.json",
+    "pathCell": "cells.json",
+    "pathSite": "sites.json",
     "pathSaveDir": null,
     "fs": 30000,
     "duration": 10,
@@ -73,10 +73,16 @@ CellActivityRecodingSimulater/
 │       └── tools.py                       # ユーティリティ
 ├── 実験条件/                              # 実験条件ファイル
 │   └── ex-1/
-│       ├── settings/                      # 設定ファイル
-│       ├── cell/                          # セルデータ
-│       ├── probe/                         # プローブデータ
-│       └── results/                       # 結果保存先
+│       ├── condition1/                    # 条件1
+│       │   ├── settings.json             # 設定ファイル
+│       │   ├── cells.json                # セルデータ
+│       │   ├── sites.json                # プローブデータ
+│       │   └── results/                  # 結果保存先
+│       └── condition2/                    # 条件2
+│           ├── settings.json             # 設定ファイル
+│           ├── cells.json                # セルデータ
+│           ├── sites.json                # プローブデータ
+│           └── results/                  # 結果保存先
 ├── main.py                               # エントリーポイント
 ├── pyproject.toml                        # プロジェクト設定
 ├── requirements.lock                     # 依存関係

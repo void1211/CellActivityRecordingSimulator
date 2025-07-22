@@ -3,8 +3,6 @@ from pathlib import Path
 
 class Settings(BaseModel):
     name: str
-    pathCell: Path
-    pathSite: Path
     pathSaveDir: Path | None
 
     fs: float
@@ -35,3 +33,5 @@ class Settings(BaseModel):
     cell_density: float = 30000  # cells/mm³
     margin: float = 100  # μm
 
+    random_seed: int = 0  # 乱数シード値（デフォルト0）
+    
