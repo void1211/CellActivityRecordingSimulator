@@ -2,6 +2,7 @@ import json
 import numpy as np
 from pathlib import Path
 import chardet
+import logging
 
 from pydantic import BaseModel
 
@@ -31,7 +32,20 @@ def load_settings(path: str) -> Settings:
             print(f"ファイル内容: {repr(content)}")
             if not content.strip():
                 raise ValueError(f"ファイルが空です: {path}")
-            return Settings(**json.loads(content))
+            settings = Settings(**json.loads(content))
+            
+            # 設定の検証を実行
+            validation_summary = settings.get_validation_summary()
+            logging.info(f"設定検証結果: {validation_summary}")
+            
+            # エラーがある場合は警告を出力（実行は継続）
+            errors = settings.validate_settings()
+            if errors:
+                logging.warning(f"設定に{len(errors)}個の警告がありますが、処理を継続します:")
+                for error in errors:
+                    logging.warning(f"  - {error}")
+            
+            return settings
     except json.JSONDecodeError as e:
         print(f"JSONデコードエラー: {e}")
         print(f"ファイル内容: {repr(content)}")
@@ -180,3 +194,4 @@ def save_probe_data(path: Path, sites: list[Site]):
     # JSON形式で保存
     with open(path / "KS_probe.json", "w") as f:
         json.dump(probe, f, indent=2)
+
