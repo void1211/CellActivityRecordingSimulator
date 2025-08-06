@@ -8,6 +8,8 @@ class Site(BaseModel):
     signalRaw: list[float] = []
     signalFiltered: list[float] = []
     signalNoise: list[float] = []
+    signalDrift: list[float] = []
+    signalPowerNoise: list[float] = []
 
     def __str__(self):
         return f"Site(id={self.id}, x={self.x}, y={self.y}, z={self.z})"
