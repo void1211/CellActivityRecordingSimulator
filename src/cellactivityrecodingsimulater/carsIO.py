@@ -1,6 +1,8 @@
 import json
 import numpy as np
 from pathlib import Path
+import chardet
+import logging
 
 from pydantic import BaseModel
 
@@ -9,12 +11,59 @@ from Cell import Cell
 from Settings import Settings
 
 def load_settings(path: str) -> Settings:
-    with open(path, "r") as f:
-        return Settings(**json.load(f))
+    # ファイルの存在確認
+    if not Path(path).exists():
+        raise FileNotFoundError(f"設定ファイルが見つかりません: {path}")
+    
+    # ファイルサイズの確認
+    file_size = Path(path).stat().st_size
+    if file_size == 0:
+        raise ValueError(f"設定ファイルが空です: {path}")
+    
+    # ファイルのエンコーディングを自動検出
+    with open(path, "rb") as f:
+        raw_data = f.read()
+        detected = chardet.detect(raw_data)
+        encoding = detected['encoding']
+    
+    try:
+        with open(path, "r", encoding=encoding) as f:
+            content = f.read()
+            print(f"ファイル内容: {repr(content)}")
+            if not content.strip():
+                raise ValueError(f"ファイルが空です: {path}")
+            settings = Settings(**json.loads(content))
+            
+            # 設定の検証を実行
+            validation_summary = settings.get_validation_summary()
+            logging.info(f"設定検証結果: {validation_summary}")
+            
+            # エラーがある場合は警告を出力（実行は継続）
+            errors = settings.validate_settings()
+            if errors:
+                logging.warning(f"設定に{len(errors)}個の警告がありますが、処理を継続します:")
+                for error in errors:
+                    logging.warning(f"  - {error}")
+            
+            return settings
+    except json.JSONDecodeError as e:
+        print(f"JSONデコードエラー: {e}")
+        print(f"ファイル内容: {repr(content)}")
+        raise
+    except Exception as e:
+        print(f"その他のエラー: {e}")
+        raise
     
 def load_cells(path: Path) -> list[Cell]:
     cells = []
-    jcells = json.load(open(path, "r"))
+    # ファイルのエンコーディングを自動検出
+    with open(path, "rb") as f:
+        raw_data = f.read()
+        detected = chardet.detect(raw_data)
+        encoding = detected['encoding']
+    
+    with open(path, "r", encoding=encoding) as f:
+        jcells = json.load(f)
     for i in range(len(jcells["id"])):
         cells.append(Cell(id=jcells["id"][i], 
                           x=jcells["x"][i], 
@@ -24,7 +73,14 @@ def load_cells(path: Path) -> list[Cell]:
     
 def load_sites(path: Path) -> list[Site]:
     sites = []
-    jsites = json.load(open(path, "r"))
+    # ファイルのエンコーディングを自動検出
+    with open(path, "rb") as f:
+        raw_data = f.read()
+        detected = chardet.detect(raw_data)
+        encoding = detected['encoding']
+    
+    with open(path, "r", encoding=encoding) as f:
+        jsites = json.load(f)
     for i in range(len(jsites["id"])):
         sites.append(Site(id=jsites["id"][i], 
                           x=jsites["x"][i], 
@@ -34,7 +90,14 @@ def load_sites(path: Path) -> list[Site]:
 
 def load_spikeTemplates(path: Path) -> list[np.ndarray]:
     spikeTemplates = []
-    jspikeTemplates = json.load(open(path, "r"))
+    # ファイルのエンコーディングを自動検出
+    with open(path, "rb") as f:
+        raw_data = f.read()
+        detected = chardet.detect(raw_data)
+        encoding = detected['encoding']
+    
+    with open(path, "r", encoding=encoding) as f:
+        jspikeTemplates = json.load(f)
     for i in range(len(jspikeTemplates["id"])):
         spikeTemplates.append(np.array(jspikeTemplates["spikeTemplate"][i]))
     return spikeTemplates
@@ -59,17 +122,17 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site]):
     signalFiltered_int16 = signalFiltered.astype(np.int16)
     
     # int16データを.npyファイルとして保存
-    np.save(path / "signalRaw_int16.npy", signalRaw_int16)
-    np.save(path / "signalNoise_int16.npy", signalNoise_int16)
-    np.save(path / "signalFiltered_int16.npy", signalFiltered_int16)
+    np.save(path / "signalRaw.npy", signalRaw_int16)
+    np.save(path / "signalNoise.npy", signalNoise_int16)
+    np.save(path / "signalFiltered.npy", signalFiltered_int16)
     
     # バイナリファイルに保存（int16）
     with open(path / "signalRaw.bin", "wb") as f:
-        signalRaw_int16.flatten().tofile(f)
+        signalRaw_int16.reshape((1,-1), order="F").tofile(f)
     with open(path / "signalNoise.bin", "wb") as f:
-        signalNoise_int16.flatten().tofile(f)
+        signalNoise_int16.reshape((1,-1), order="F").tofile(f)
     with open(path / "signalFiltered.bin", "wb") as f:
-        signalFiltered_int16.flatten().tofile(f)
+        signalFiltered_int16.reshape((1,-1), order="F").tofile(f)
 
     cell_ids = np.array([cell.id for cell in cells])
     cell_positions = np.array([[cell.x, cell.y, cell.z] for cell in cells])
@@ -80,34 +143,55 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site]):
     site_ids = np.array([site.id for site in sites])
     site_positions = np.array([[site.x, site.y, site.z] for site in sites])
 
-    with open(path / "cell_ids.npy", "wb") as f:
-        cell_ids.tofile(f)
-    with open(path / "cell_positions.npy", "wb") as f:
-        cell_positions.tofile(f)
-    with open(path / "spike_times.npy", "wb") as f:
-        spike_times.tofile(f)
-    with open(path / "spike_amplitudes.npy", "wb") as f:
-        spike_amps.tofile(f)
-    with open(path / "spike_templates.npy", "wb") as f:
-        spike_temps.tofile(f)
-
-    with open(path / "site_ids.npy", "wb") as f:
-        site_ids.tofile(f)
-    with open(path / "site_positions.npy", "wb") as f:
-        site_positions.tofile(f)
-
-    # 互換性のために, 別ファイル名でも保存
-    with open(path / "fire_times.npy", "wb") as f:
-        spike_times.tofile(f)
-
-    with open(path / "raw.bin", "wb") as f:
-        signalRaw_int16.flatten().tofile(f)
-    with open(path / "noise.bin", "wb") as f:
-        signalNoise_int16.flatten().tofile(f)
-    with open(path / "filt.bin", "wb") as f:
-        signalFiltered_int16.flatten().tofile(f)
-
+    # 配列はnp.saveで保存（形状とデータ型を保持）
+    np.save(path / "cell_ids.npy", cell_ids)
+    np.save(path / "cell_positions.npy", cell_positions)
+    np.save(path / "site_ids.npy", site_ids)
+    np.save(path / "site_positions.npy", site_positions)
     
-
-
+    # object型の配列はnp.saveで保存
+    np.save(path / "spike_times.npy", spike_times)
+    np.save(path / "spike_amplitudes.npy", spike_amps)
+    np.save(path / "spike_templates.npy", spike_temps)
     
+    # probe形式でsitesを保存
+    save_probe_data(path, sites)
+
+def convert_sites_for_kilosort(sites: list[Site]) -> dict:
+    """
+    sitesをKilosort用のprobe形式に変換する
+    """
+    # チャンネルマップを作成
+    chanMap = [site.id for site in sites]
+    if min(chanMap) != 0:
+        chanMap = [chanMap[i] - min(chanMap) for i in range(len(chanMap))]
+    # 座標を抽出
+    xc = [site.x for site in sites]
+    yc = [site.y for site in sites]
+    
+    # kcoords（プローブグループ）を設定（デフォルトは全て1）
+    kcoords = [0] * len(sites)
+    
+    # チャンネル数を設定
+    n_chan = len(sites)
+    
+    probe = {
+        'chanMap': chanMap,
+        'xc': xc,
+        'yc': yc,
+        'kcoords': kcoords,
+        'n_chan': n_chan
+    }
+    
+    return probe
+
+def save_probe_data(path: Path, sites: list[Site]):
+    """
+    sitesをKilosort用のprobe形式で保存する
+    """
+    probe = convert_sites_for_kilosort(sites)
+    
+    # JSON形式で保存
+    with open(path / "KS_probe.json", "w") as f:
+        json.dump(probe, f, indent=2)
+
