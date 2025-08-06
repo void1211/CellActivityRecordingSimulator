@@ -9,68 +9,98 @@ from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-def run_single_experiment(condition_dir: Path, settings_file: Path, show_plot: bool = True):
+def run_single_experiment(example_dir: Path, condition_name: str, show_plot: bool = True):
     """単一の実験を実行する"""
     try:
-        logging.info(f"=== 実験開始: {condition_dir.name} ===")
+        logging.info(f"=== 実験開始: {condition_name} ===")
+        
+        # 新しいディレクトリ構成に合わせてファイルパスを設定
+        settings_file = example_dir / "settings" / f"{condition_name}.json"
+        cell_file = example_dir / "cell" / f"{condition_name}.json"
+        site_file = example_dir / "probe" / f"{condition_name}.json"
         
         # 設定ファイルの読み込み
+        if not settings_file.exists():
+            logging.error(f"設定ファイルが見つかりません: {settings_file}")
+            return False
+        
         settings = carsIO.load_settings(settings_file)
         logging.info(f"設定ファイル読み込み完了: {settings}")
+        
+        # 設定の検証を実行
+        logging.info("=== 設定検証開始 ===")
+        validation_summary = settings.get_validation_summary()
+        logging.info(validation_summary)
+        
+        # 重大なエラーがある場合は処理を停止
+        errors = settings.validate_settings()
+        if errors:
+            logging.error("設定に重大なエラーがあります。処理を停止します。")
+            return False
+        
+        logging.info("=== 設定検証完了 ===")
         
         # 乱数シードのセット
         import random
         random.seed(settings.random_seed)
         np.random.seed(settings.random_seed)
         
-        # セルデータの読み込み（条件フォルダ内から）
-        cell_file = condition_dir / "cells.json"
+        # セルデータの読み込み
         if not cell_file.exists():
-            cell_file = condition_dir / "cell.json"  # フォールバック
+            logging.error(f"セルファイルが見つかりません: {cell_file}")
+            return False
         cells = carsIO.load_cells(cell_file)
         logging.info(f"セルデータ読み込み完了: {len(cells)} cells")
         
-        # サイトデータの読み込み（条件フォルダ内から）
-        site_file = condition_dir / "probe.json"
+        # サイトデータの読み込み
         if not site_file.exists():
-            site_file = condition_dir / "site.json"  # フォールバック
+            logging.error(f"サイトファイルが見つかりません: {site_file}")
+            return False
         sites = carsIO.load_sites(site_file)
         logging.info(f"サイトデータ読み込み完了: {len(sites)} sites")
 
         # 保存ディレクトリの作成
         if settings.pathSaveDir is None:
-            pathSaveDir = condition_dir
+            pathSaveDir = example_dir / "results" / condition_name
         else:
-            pathSaveDir = settings.pathSaveDir / condition_dir.name
+            pathSaveDir = settings.pathSaveDir / example_dir.name / condition_name
         pathSaveDir.mkdir(parents=True, exist_ok=True)
         
         # ノイズの適用
         if settings.noiseType == "truth":
             for site in sites:
                 site.signalNoise = tools.getRecordingNoiseFromTruth(settings)
-            logging.info("真のノイズを適用")
+                site.signalRaw = site.signalNoise.copy()
         elif settings.noiseType == "normal" or settings.noiseType == "gaussian":
             for site in sites:
                 site.signalNoise = tools.simulateRecordingNoise(settings, settings.noiseType)
-            logging.info("乱数ノイズを適用")
+                site.signalRaw = site.signalNoise.copy()
+        elif settings.noiseType == "model":
+            # ノイズ細胞を生成してサイトに追加
+            noise_cells = tools.generateNoiseCells(settings, sites)
+            # モデルノイズの場合は初期信号をゼロで初期化
+            for site in sites:
+                site.signalRaw = tools.addNoiseCellsToSite(noise_cells, site, settings)
+                site.signalNoise = site.signalRaw.copy()
         elif settings.noiseType == "none":
             for site in sites:
                 site.signalNoise = np.zeros(int(settings.duration * settings.fs))
-            logging.info("ノイズなしを適用")
+                site.signalRaw = np.zeros(int(settings.duration * settings.fs)).tolist()
         else:
             raise ValueError(f"Invalid noise type: {settings.noiseType}")
         
         # スパイクテンプレートの読み込み
         if settings.spikeType == "gabor":
             spikeTemplates = [tools.simulateSpikeTemplate(settings) for _ in range(len(cells))]
-            logging.info("ガボールスパイクテンプレートを生成")
-        elif settings.spikeType == "templates":
-            # テンプレートファイルのパスを条件フォルダ内に変更
-            template_file = condition_dir / "templates.json"
+        elif settings.spikeType == "template":
+            # テンプレートファイルのパスを設定
+            template_file = example_dir / "templates" / f"{condition_name}.json"
             if settings.pathSpikeList:
-                template_file = condition_dir / settings.pathSpikeList.name
-            spikeTemplates = carsIO.loadSpikeTemplates(template_file)
-            logging.info("テンプレートスパイクテンプレートを読み込み")
+                template_file = example_dir / settings.pathSpikeList.name
+            if not template_file.exists():
+                logging.error(f"テンプレートファイルが見つかりません: {template_file}")
+                return False
+            spikeTemplates = carsIO.load_spikeTemplates(template_file)
         else:
             raise ValueError(f"Invalid spike type: {settings.spikeType}")
         
@@ -80,23 +110,28 @@ def run_single_experiment(condition_dir: Path, settings_file: Path, show_plot: b
             cell.spikeTemp = spikeTemplates[i]
             for t in cell.spikeTimeList:
                 cell.spikeAmpList.append(tools.calcSpikeAmp(settings))
-            logging.info(f"セル{i}のスパイク: {cell.spikeTemp[0:10]}")
-        logging.info("各セルのスパイク時刻・テンプレートを設定")
 
         # 信号生成
+        logging.info("信号生成開始...")
         for site in sites:
-            site.signalRaw = site.signalNoise.copy()
-            for cell in cells:
-                # デバッグ情報を追加
-                original_amp = cell.spikeAmpList[0] if cell.spikeAmpList else 0
+            
+            # メインの細胞のスパイクを追加
+            for cell_idx, cell in enumerate(cells):
                 scaledSpikeAmpList = tools.calcScaledSpikeAmp(cell, site, settings)
-                scaled_amp = scaledSpikeAmpList[0] if scaledSpikeAmpList else 0
-                distance = tools.calcDistance(cell, site)
-                #logging.info(f"セル{cell.id}: 元振幅={original_amp:.2f}, 距離={distance:.2f}, スケール後振幅={scaled_amp:.2f}")
-                
                 tools.addSpikeToSignal(cell, site, scaledSpikeAmpList)
+            
+            # ドリフトを追加（個別ドリフト）
+            site.signalRaw, site.signalDrift = tools.addDriftToSignal(site.signalRaw, settings, settings.drift_type)
+            
             site.signalFiltered = tools.getFilteredSignal(site.signalRaw, settings.fs, 300, 3000)
-        logging.info("信号生成完了")
+        
+        # 共通ドリフトを追加
+        if hasattr(settings, 'common_drift') and settings.common_drift:
+            tools.addCommonDriftToSites(sites, settings)
+        
+        # 共通電源ノイズを追加
+        if hasattr(settings, 'common_power_noise') and settings.common_power_noise:
+            tools.addCommonPowerNoiseToSites(sites, settings, settings.power_line_frequency)
 
         # データの保存
         carsIO.save_data(pathSaveDir, cells, sites)
@@ -104,44 +139,65 @@ def run_single_experiment(condition_dir: Path, settings_file: Path, show_plot: b
 
         # プロット表示（オプション）
         if show_plot:
-            plt.figure(figsize=(10, 8))
             
-            # 元の信号
+            # プロット用の時間範囲を設定
             tstart = 0
-            tend = 3000
-            plt.subplot(3, 1, 1)
+            tend = min(300000, len(sites[0].signalRaw))  # 最初の1000サンプルを表示
+            
+            plt.figure(figsize=(12, 8))
+            
+            # 生信号
+            plt.subplot(5, 1, 1)
             plt.plot(sites[0].signalRaw[tstart:tend])
-            plt.title(f'Raw Signal - {condition_dir.name}')
+            plt.title(f'Raw Signal - {condition_name}')
             plt.ylabel('Amplitude')
             
             # フィルタ済み信号
-            plt.subplot(3, 1, 2)
+            plt.subplot(5, 1, 2)
             plt.plot(sites[0].signalFiltered[tstart:tend])
-            plt.title(f'Filtered Signal - {condition_dir.name}')
+            plt.title(f'Filtered Signal - {condition_name}')
             plt.ylabel('Amplitude')
 
-            plt.subplot(3, 1, 3)
+            plt.subplot(5, 1, 3)
             plt.plot(sites[0].signalNoise[tstart:tend])
-            plt.title(f'Noise Signal - {condition_dir.name}')
+            plt.title(f'Noise Signal - {condition_name}')
+            plt.ylabel('Amplitude')
+
+            plt.subplot(5, 1, 4)
+            plt.plot(sites[0].signalDrift[tstart:tend])
+            plt.title(f'Drift Signal - {condition_name}')
+            plt.ylabel('Amplitude')
+
+            plt.subplot(5, 1, 5)
+            plt.plot(sites[0].signalPowerNoise[tstart:tend])
+            plt.title(f'Power Line Noise - {condition_name}')
             plt.ylabel('Amplitude')
             
             plt.tight_layout()
             plt.show()
             
-            # 信号の統計情報をログに出力
-            logging.info(f"Raw signal - min: {np.min(sites[0].signalRaw):.2f}, max: {np.max(sites[0].signalRaw):.2f}, std: {np.std(sites[0].signalRaw):.2f}")
-            logging.info(f"Filtered signal - min: {np.min(sites[0].signalFiltered):.2f}, max: {np.max(sites[0].signalFiltered):.2f}, std: {np.std(sites[0].signalFiltered):.2f}")
-            logging.info("プロット表示完了")
+            # ISIプロットを表示
+            if len(cells) > 0:
+                tools.plotMultipleCellISI(cells, settings.fs)
+                
+                # 最初の細胞の詳細ISIプロットも表示
+                if len(cells) > 0 and len(cells[0].spikeTimeList) > 1:
+                    tools.plotISI(cells[0].spikeTimeList, settings.fs, cell_id=cells[0].id)
+                    
+                    # 不応期効果の可視化
+                    if settings.isRefractory:
+                        tools.plotRefractoryEffect(cells[0].spikeTimeList, settings.fs, 
+                                                settings.refractoryPeriod, cell_id=cells[0].id)
         
-        logging.info(f"=== 実験完了: {condition_dir.name} ===")
+        logging.info(f"=== 実験完了: {condition_name} ===")
         return True
         
     except Exception as e:
-        logging.error(f"実験でエラー発生: {condition_dir.name} - {e}", exc_info=True)
+        logging.error(f"実験でエラー発生: {condition_name} - {e}", exc_info=True)
         return False
 
 def main(example_dir: str, condition_pattern: str = "*", show_plot: bool = True):
-    """メイン関数 - 複数の条件フォルダを実行"""
+    """メイン関数 - 複数の条件を実行"""
     try:
         example_dir = Path(example_dir)
         
@@ -149,54 +205,41 @@ def main(example_dir: str, condition_pattern: str = "*", show_plot: bool = True)
             logging.error(f"実験ディレクトリが見つかりません: {example_dir}")
             return
         
-        # 条件フォルダの検索
-        condition_dirs = [d for d in example_dir.iterdir() 
-                         if d.is_dir() and d.name != "results" and d.match(condition_pattern)]
-        
-        if not condition_dirs:
-            logging.error(f"条件フォルダが見つかりません: {example_dir}/{condition_pattern}")
+        # 設定ファイルから条件名を取得
+        settings_dir = example_dir / "settings"
+        if not settings_dir.exists():
+            logging.error(f"settingsディレクトリが見つかりません: {settings_dir}")
             return
         
-        logging.info(f"実行する条件フォルダ数: {len(condition_dirs)}")
-        for i, condition_dir in enumerate(condition_dirs, 1):
-            logging.info(f"{i}. {condition_dir.name}")
+        # 条件ファイルの検索
+        condition_files = list(settings_dir.glob(f"{condition_pattern}.json"))
         
-        # 各条件フォルダを順次実行
+        if not condition_files:
+            logging.error(f"条件ファイルが見つかりません: {settings_dir}/{condition_pattern}.json")
+            return
+        
+        # 条件名を抽出（.jsonを除く）
+        condition_names = [f.stem for f in condition_files]
+        
+        logging.info(f"実行する条件数: {len(condition_names)}")
+        for i, condition_name in enumerate(condition_names, 1):
+            logging.info(f"{i}. {condition_name}")
+        
+        # 各条件を順次実行
         success_count = 0
-        for i, condition_dir in enumerate(condition_dirs, 1):
-            logging.info(f"\n[{i}/{len(condition_dirs)}] {condition_dir.name} を実行中...")
+        for i, condition_name in enumerate(condition_names, 1):
+            logging.info(f"\n[{i}/{len(condition_names)}] {condition_name} を実行中...")
             
-            # 設定ファイルの検索
-            settings_files = list(condition_dir.glob("*.json"))
-            if not settings_files:
-                logging.error(f"設定ファイルが見つかりません: {condition_dir}")
-                continue
+            # 最後の条件以外はプロットを無効化（オプション）
+            current_show_plot = show_plot and (i == len(condition_names))
             
-            # 設定ファイルを優先順位で選択
-            settings_file = None
-            for filename in ["settings.json", "config.json", "setting.json"]:
-                potential_file = condition_dir / filename
-                if potential_file.exists():
-                    settings_file = potential_file
-                    break
-            
-            # 見つからない場合は最初のJSONファイルを使用
-            if settings_file is None:
-                settings_file = settings_files[0]
-                logging.warning(f"明示的な設定ファイルが見つからないため、最初のJSONファイルを使用: {settings_file}")
-            
-            logging.info(f"使用する設定ファイル: {settings_file}")
-            
-            # 最後のフォルダ以外はプロットを無効化（オプション）
-            current_show_plot = show_plot and (i == len(condition_dirs))
-            
-            if run_single_experiment(condition_dir, settings_file, current_show_plot):
+            if run_single_experiment(example_dir, condition_name, current_show_plot):
                 success_count += 1
             else:
-                logging.error(f"実験が失敗しました: {condition_dir.name}")
+                logging.error(f"実験が失敗しました: {condition_name}")
         
         logging.info(f"\n=== 実行完了 ===")
-        logging.info(f"成功: {success_count}/{len(condition_dirs)}")
+        logging.info(f"成功: {success_count}/{len(condition_names)}")
         
     except Exception as e:
         logging.error(f"メイン処理でエラー発生: {e}", exc_info=True)
