@@ -5,6 +5,7 @@ class Cell(BaseModel):
     x: int
     y: int
     z: int
+    group: int = 0  # 細胞のグループID（デフォルトは0）
     spikeTimeList: list[int] = []
     spikeAmpList: list[float] = []
     spikeTemp: list[float] = []
@@ -14,7 +15,7 @@ class Cell(BaseModel):
             spike_display = str(self.spikeTimeList)
         else:
             spike_display = f"{self.spikeTimeList[:5]}...{self.spikeTimeList[-5:]}"
-        return f"Cell(id={self.id}, x={self.x}, y={self.y}, z={self.z}, spikeTimeList={spike_display})"
+        return f"Cell(id={self.id}, x={self.x}, y={self.y}, z={self.z}, group={self.group}, spikeTimeList={spike_display})"
 
     def __repr__(self):
         return self.__str__()

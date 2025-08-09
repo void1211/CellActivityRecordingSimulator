@@ -19,11 +19,11 @@ def parse_args():
     parser.add_argument(
         '--conditions', '-c',
         type=str,
-        default='*',
-        help='Condition folder pattern (default: *)'
+        default='condition*',
+        help='Condition folder pattern (default: condition*)'
     )
     parser.add_argument(
-        '--no-plot',
+        '--no-plot', '-np',
         action='store_true',
         help='Disable plot display'
     )

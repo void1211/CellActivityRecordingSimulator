@@ -151,9 +151,8 @@ def simulateSpikeTimes(settings: Settings) -> list[int]:
 
     # より現実的な不応期モデル
     if refractoryPeriod > 0:
-        # 絶対不応期 + 相対不応期を考慮
-        absolute_refractory = refractoryPeriod * 0.4  # 絶対不応期（40%）
-        relative_refractory = refractoryPeriod * 0.6   # 相対不応期（60%）
+        # 絶対不応期のみを考慮
+        absolute_refractory = refractoryPeriod * 1.0  # 絶対不応期（100%）
         
         # スパイク時間を生成
         spike_times = []
@@ -162,18 +161,6 @@ def simulateSpikeTimes(settings: Settings) -> list[int]:
         while current_time < duration * fs:
             # 絶対不応期中はスパイクを発火できない
             current_time += absolute_refractory * fs / 1000
-            
-            # 相対不応期中は確率的にスパイクを発火
-            if current_time < duration * fs:
-                # 相対不応期中の発火確率を計算
-                relative_prob = 0.3  # 相対不応期中の発火確率（30%）
-                
-                if np.random.random() < relative_prob:
-                    # 相対不応期中にスパイクを発火
-                    current_time += relative_refractory * fs / 1000
-                else:
-                    # 相対不応期をスキップ
-                    current_time += relative_refractory * fs / 1000
             
             # 通常のスパイク間隔を生成
             if current_time < duration * fs:
@@ -187,7 +174,7 @@ def simulateSpikeTimes(settings: Settings) -> list[int]:
         return spike_times
     else:
         # 不応期なしの場合（従来の実装）
-        isi = np.random.exponential(1 / avgSpikeRate, size=1000) + refractoryPeriod / 1000
+        isi = np.random.exponential(1 / avgSpikeRate, size=1000)
         isi = np.ceil(isi * fs)
         spikeTimes = np.cumsum(isi)
         spikeTimes = spikeTimes[spikeTimes < int(duration * fs)]
@@ -290,11 +277,176 @@ def simulateSpikeTemplate(settings: Settings) -> list[float]:
         gaborSigmaList = np.random.choice(settings.gaborSigmaList)
         gaborf0List = np.random.choice(settings.gaborf0List)
         gaborthetaList = np.random.choice(settings.gaborthetaList)
-        spikeTemplate = gabor(gaborSigmaList, gaborf0List, gaborthetaList, settings.fs, settings.spikeWidth)
+        # 度からラジアンに変換（設定では度単位で指定されているため）
+        gaborthetaList_rad = gaborthetaList * np.pi / 180
+        spikeTemplate = gabor(gaborSigmaList, gaborf0List, gaborthetaList_rad, settings.fs, settings.spikeWidth)
         
         return spikeTemplate
     else:
         raise ValueError(f"spikeType '{settings.spikeType}' is not supported for template simulation")
+
+def calculate_cosine_similarity(template1: list[float], template2: list[float]) -> float:
+    """
+    2つのスパイクテンプレート間のコサイン類似度を計算する
+    
+    Args:
+        template1: 1つ目のテンプレート
+        template2: 2つ目のテンプレート
+    
+    Returns:
+        float: コサイン類似度（-1.0-1.0）
+    """
+    # リストをnumpy配列に変換
+    t1 = np.array(template1)
+    t2 = np.array(template2)
+    
+    # 正規化
+    t1_norm = t1 / np.linalg.norm(t1)
+    t2_norm = t2 / np.linalg.norm(t2)
+    
+    # コサイン類似度を計算
+    similarity = np.dot(t1_norm, t2_norm)
+    
+    # 値を-1.0-1.0の範囲に制限
+    return max(-1.0, min(1.0, similarity))
+
+def generate_similar_templates_for_group(cells: list[Cell], settings: Settings, group_id: int) -> list[list[float]]:
+    """
+    同じグループの細胞に対して類似度制御されたスパイクテンプレートを生成する
+    
+    Args:
+        cells: 細胞のリスト
+        settings: シミュレーション設定
+        group_id: 対象のグループID
+    
+    Returns:
+        list[list[float]]: 生成されたテンプレートのリスト
+    """
+    # 指定されたグループの細胞を抽出
+    group_cells = [cell for cell in cells if cell.group == group_id]
+    
+    if not group_cells:
+        logging.warning(f"グループ {group_id} の細胞が見つかりません")
+        return []
+    
+    templates = []
+    
+    for i, cell in enumerate(group_cells):
+        if i == 0:
+            # 最初の細胞は基準テンプレートを生成
+            template = simulateSpikeTemplate(settings)
+            templates.append(template)
+            logging.info(f"グループ {group_id} の基準テンプレートを生成しました")
+        else:
+            # 2番目以降の細胞は類似度制御されたテンプレートを生成
+            template = generate_similar_template(templates[0], settings)
+            templates.append(template)
+            similarity = calculate_cosine_similarity(templates[0], template)
+            logging.info(f"グループ {group_id} の細胞 {cell.id} のテンプレートを生成しました（類似度: {similarity:.3f}）")
+    
+    return templates
+
+def generate_similar_template(base_template: list[float], settings: Settings) -> list[float]:
+    """
+    基準テンプレートと類似度制御されたテンプレートを生成する
+    
+    Args:
+        base_template: 基準テンプレート
+        settings: シミュレーション設定
+    
+    Returns:
+        list[float]: 類似度制御されたテンプレート
+    """
+    if not settings.enable_template_similarity_control:
+        # 類似度制御が無効な場合は通常のテンプレートを生成
+        return simulateSpikeTemplate(settings)
+    
+    min_similarity = settings.min_cosine_similarity
+    max_similarity = settings.max_cosine_similarity
+    max_attempts = 1000
+    
+    for attempt in range(max_attempts):
+        # 新しいテンプレートを生成（設定の制限を無視）
+        new_template = generate_unrestricted_template(settings)
+        
+        # 類似度を計算
+        similarity = calculate_cosine_similarity(base_template, new_template)
+        
+        # 類似度が指定範囲内にあるかチェック
+        if min_similarity <= similarity <= max_similarity:
+            return new_template
+    
+    # 最大試行回数に達した場合は、最も近いテンプレートを返す
+    logging.warning(f"類似度制御の最大試行回数（{max_attempts}）に達しました。最も近いテンプレートを使用します。")
+    
+    best_template = None
+    best_similarity = -1.0
+    
+    for _ in range(10):  # 最後の10回の試行
+        template = generate_unrestricted_template(settings)
+        similarity = calculate_cosine_similarity(base_template, template)
+        
+        if similarity > best_similarity:
+            best_similarity = similarity
+            best_template = template
+    
+    return best_template
+
+def generate_unrestricted_template(settings: Settings) -> list[float]:
+    """
+    設定の制限を無視してスパイクテンプレートを生成する
+    
+    Args:
+        settings: シミュレーション設定
+    
+    Returns:
+        list[float]: 生成されたテンプレート
+    """
+    if settings.spikeType == "gabor":
+        # 完全にランダムな値をパラメータとして使用
+        # 広い範囲でランダムに生成
+        gaborSigmaList = np.random.uniform(0.2, 0.4)  # 0.1-2.0 msec
+        gaborf0List = np.random.uniform(300, 500)      # 50-500 Hz
+        gaborthetaList = np.random.uniform(0, 360)  # 0-2π rad
+        spikeTemplate = gabor(gaborSigmaList, gaborf0List, gaborthetaList, settings.fs, settings.spikeWidth)
+        
+        return spikeTemplate
+    else:
+        # 他のspikeTypeの場合は通常の生成方法を使用
+        return simulateSpikeTemplate(settings)
+
+def assign_templates_to_cells(cells: list[Cell], settings: Settings) -> None:
+    """
+    細胞にスパイクテンプレートを割り当てる（グループ別の類似度制御付き）
+    
+    Args:
+        cells: 細胞のリスト
+        settings: シミュレーション設定
+    """
+    if not cells:
+        return
+    
+    # グループ別に細胞を分類
+    groups = {}
+    for cell in cells:
+        group_id = cell.group
+        if group_id not in groups:
+            groups[group_id] = []
+        groups[group_id].append(cell)
+    
+    # 各グループに対してテンプレートを生成・割り当て
+    for group_id, group_cells in groups.items():
+        if settings.enable_template_similarity_control and len(group_cells) > 1:
+            # 類似度制御が有効で、グループ内に複数の細胞がある場合
+            templates = generate_similar_templates_for_group(cells, settings, group_id)
+            for cell, template in zip(group_cells, templates):
+                cell.spikeTemp = template
+        else:
+            # 通常のテンプレート生成
+            for cell in group_cells:
+                cell.spikeTemp = simulateSpikeTemplate(settings)
+    
+    logging.info(f"テンプレート割り当て完了: {len(cells)} 細胞、{len(groups)} グループ")
 
 def gabor(sigma: float, f0: float, theta: float, fs: float, spikeWidth: float) -> np.ndarray:
     """ガボール関数を生成する"""
