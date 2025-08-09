@@ -31,6 +31,12 @@ class Settings(BaseModel):
     spikeAmpMin: Optional[float] = None # uV
     attenTime: Optional[float] = None # msec
     
+    # スパイクテンプレート類似度制御設定
+    enable_template_similarity_control: bool = False  # テンプレート類似度制御を有効にするかどうか
+    min_cosine_similarity: float = 0.7  # 最小コサイン類似度（-1.0-1.0）
+    max_cosine_similarity: float = 0.95  # 最大コサイン類似度（-1.0-1.0）
+    similarity_control_attempts: int = 100  # 類似度制御の最大試行回数
+    
     # ノイズ細胞生成設定
     cell_density: float = 30000  # cells/mm³
     margin: float = 100  # μm
@@ -72,6 +78,13 @@ class Settings(BaseModel):
         valid_types = ["linear", "exponential", "oscillatory", "random_walk", "step"]
         if v not in valid_types:
             raise ValueError(f"drift_type must be one of {valid_types}, got {v}")
+        return v
+
+    @field_validator('min_cosine_similarity', 'max_cosine_similarity')
+    @classmethod
+    def validate_cosine_similarity(cls, v):
+        if v < -1.0 or v > 1.0:
+            raise ValueError(f"cosine similarity must be between -1.0 and 1.0, got {v}")
         return v
 
     def validate_settings(self) -> list[str]:
@@ -134,6 +147,13 @@ class Settings(BaseModel):
         
         if self.attenTime is not None and self.attenTime <= 0:
             errors.append("attenTime must be positive")
+
+        # 類似度制御設定の検証
+        if self.enable_template_similarity_control:
+            if self.min_cosine_similarity >= self.max_cosine_similarity:
+                errors.append("min_cosine_similarity must be less than max_cosine_similarity")
+            if self.similarity_control_attempts <= 0:
+                errors.append("similarity_control_attempts must be positive")
 
         return errors
 

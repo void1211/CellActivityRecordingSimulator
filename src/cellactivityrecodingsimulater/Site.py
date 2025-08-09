@@ -10,7 +10,8 @@ class Site(BaseModel):
     signalNoise: list[float] = []
     signalDrift: list[float] = []
     signalPowerNoise: list[float] = []
-
+    signalBGNoise: list[float] = []
+    
     def __str__(self):
         return f"Site(id={self.id}, x={self.x}, y={self.y}, z={self.z})"
 

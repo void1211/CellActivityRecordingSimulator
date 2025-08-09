@@ -15,9 +15,9 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         logging.info(f"=== 実験開始: {condition_name} ===")
         
         # 新しいディレクトリ構成に合わせてファイルパスを設定
-        settings_file = example_dir / "settings" / f"{condition_name}.json"
-        cell_file = example_dir / "cell" / f"{condition_name}.json"
-        site_file = example_dir / "probe" / f"{condition_name}.json"
+        settings_file = example_dir / condition_name / "settings.json"
+        cell_file = example_dir / condition_name / "cells.json"
+        site_file = example_dir / condition_name / "probe.json"
         
         # 設定ファイルの読み込み
         if not settings_file.exists():
@@ -25,7 +25,7 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             return False
         
         settings = carsIO.load_settings(settings_file)
-        logging.info(f"設定ファイル読み込み完了: {settings}")
+        logging.info(f"設定ファイル読み込み完了: {settings.name}")
         
         # 設定の検証を実行
         logging.info("=== 設定検証開始 ===")
@@ -61,9 +61,9 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
 
         # 保存ディレクトリの作成
         if settings.pathSaveDir is None:
-            pathSaveDir = example_dir / "results" / condition_name
+            pathSaveDir = example_dir / condition_name
         else:
-            pathSaveDir = settings.pathSaveDir / example_dir.name / condition_name
+            pathSaveDir = settings.pathSaveDir / condition_name
         pathSaveDir.mkdir(parents=True, exist_ok=True)
         
         # ノイズの適用
@@ -80,8 +80,8 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             noise_cells = tools.generateNoiseCells(settings, sites)
             # モデルノイズの場合は初期信号をゼロで初期化
             for site in sites:
-                site.signalRaw = tools.addNoiseCellsToSite(noise_cells, site, settings)
-                site.signalNoise = site.signalRaw.copy()
+                site.signalBGNoise = tools.addNoiseCellsToSite(noise_cells, site, settings)
+                site.signalRaw = site.signalBGNoise.copy()
         elif settings.noiseType == "none":
             for site in sites:
                 site.signalNoise = np.zeros(int(settings.duration * settings.fs))
@@ -107,9 +107,16 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         # 各セルの処理
         for i, cell in enumerate(cells):
             cell.spikeTimeList = tools.simulateSpikeTimes(settings)
-            cell.spikeTemp = spikeTemplates[i]
             for t in cell.spikeTimeList:
                 cell.spikeAmpList.append(tools.calcSpikeAmp(settings))
+        
+        # スパイクテンプレートの割り当て（グループ別類似度制御付き）
+        if settings.spikeType == "gabor":
+            tools.assign_templates_to_cells(cells, settings)
+        else:
+            # テンプレートファイルから読み込んだ場合は従来通り
+            for i, cell in enumerate(cells):
+                cell.spikeTemp = spikeTemplates[i]
 
         # 信号生成
         logging.info("信号生成開始...")
@@ -134,7 +141,7 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             tools.addCommonPowerNoiseToSites(sites, settings, settings.power_line_frequency)
 
         # データの保存
-        carsIO.save_data(pathSaveDir, cells, sites)
+        carsIO.save_data(pathSaveDir, cells, sites, noise_cells)
         logging.info(f"データ保存完了: {pathSaveDir}")
 
         # プロット表示（オプション）
@@ -204,18 +211,13 @@ def main(example_dir: str, condition_pattern: str = "*", show_plot: bool = True)
         if not example_dir.exists():
             logging.error(f"実験ディレクトリが見つかりません: {example_dir}")
             return
-        
-        # 設定ファイルから条件名を取得
-        settings_dir = example_dir / "settings"
-        if not settings_dir.exists():
-            logging.error(f"settingsディレクトリが見つかりません: {settings_dir}")
-            return
+
         
         # 条件ファイルの検索
-        condition_files = list(settings_dir.glob(f"{condition_pattern}.json"))
+        condition_files = list(example_dir.glob(f"{condition_pattern}"))
         
         if not condition_files:
-            logging.error(f"条件ファイルが見つかりません: {settings_dir}/{condition_pattern}.json")
+            logging.error(f"条件ファイルが見つかりません: {example_dir}/{condition_pattern}")
             return
         
         # 条件名を抽出（.jsonを除く）

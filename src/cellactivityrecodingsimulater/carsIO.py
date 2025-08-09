@@ -64,11 +64,24 @@ def load_cells(path: Path) -> list[Cell]:
     
     with open(path, "r", encoding=encoding) as f:
         jcells = json.load(f)
+    
+    # グループ情報が存在するかチェック
+    has_groups = "group" in jcells
+    
     for i in range(len(jcells["id"])):
-        cells.append(Cell(id=jcells["id"][i], 
-                          x=jcells["x"][i], 
-                          y=jcells["y"][i], 
-                          z=jcells["z"][i]))
+        cell_data = {
+            "id": jcells["id"][i], 
+            "x": jcells["x"][i], 
+            "y": jcells["y"][i], 
+            "z": jcells["z"][i]
+        }
+        
+        # グループ情報が存在する場合は追加
+        if has_groups:
+            cell_data["group"] = jcells["group"][i]
+        
+        cells.append(Cell(**cell_data))
+    
     return cells
     
 def load_sites(path: Path) -> list[Site]:
@@ -102,7 +115,7 @@ def load_spikeTemplates(path: Path) -> list[np.ndarray]:
         spikeTemplates.append(np.array(jspikeTemplates["spikeTemplate"][i]))
     return spikeTemplates
 
-def save_data(path: Path, cells: list[Cell], sites: list[Site]):
+def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: list[Cell]=None):
 
     # todo ファイル名を設定できるようにする
     # todo 必要事項全て保存できるようにする
@@ -110,7 +123,12 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site]):
     signalRaw = np.array([site.signalRaw for site in sites])
     signalNoise = np.array([site.signalNoise for site in sites])
     signalFiltered = np.array([site.signalFiltered for site in sites])
-    
+    signalPowerNoise = np.array([site.signalPowerNoise for site in sites])
+    signalDrift = np.array([site.signalDrift for site in sites])
+    signalBGNoise = np.array([site.signalBGNoise for site in sites])
+
+    # グループ情報を保存
+    group = np.array([cell.group for cell in cells], dtype=object)
     # 異なる長さのリストをobject型で保存
     spikeTimeList = np.array([cell.spikeTimeList for cell in cells], dtype=object)
     spikeAmpList = np.array([cell.spikeAmpList for cell in cells], dtype=object)
@@ -120,11 +138,18 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site]):
     signalRaw_int16 = signalRaw.astype(np.int16)
     signalNoise_int16 = signalNoise.astype(np.int16)
     signalFiltered_int16 = signalFiltered.astype(np.int16)
+    signalPowerNoise_int16 = signalPowerNoise.astype(np.int16)
+    signalDrift_int16 = signalDrift.astype(np.int16)
+    signalBGNoise_int16 = signalBGNoise.astype(np.int16)
     
     # int16データを.npyファイルとして保存
     np.save(path / "signalRaw.npy", signalRaw_int16)
     np.save(path / "signalNoise.npy", signalNoise_int16)
     np.save(path / "signalFiltered.npy", signalFiltered_int16)
+    np.save(path / "signalPowerNoise.npy", signalPowerNoise_int16)
+    np.save(path / "signalDrift.npy", signalDrift_int16)
+    np.save(path / "signalBGNoise.npy", signalBGNoise_int16)
+    np.save(path / "group.npy", group)
     
     # バイナリファイルに保存（int16）
     with open(path / "signalRaw.bin", "wb") as f:
@@ -156,6 +181,19 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site]):
     
     # probe形式でsitesを保存
     save_probe_data(path, sites)
+
+    if noise_cells is not None:
+        noise_cell_ids = np.array([noise_cell.id for noise_cell in noise_cells])
+        noise_cell_positions = np.array([[noise_cell.x, noise_cell.y, noise_cell.z] for noise_cell in noise_cells])
+        noise_spike_times = np.array([noise_cell.spikeTimeList for noise_cell in noise_cells], dtype=object)
+        noise_spike_amps = np.array([noise_cell.spikeAmpList for noise_cell in noise_cells], dtype=object)
+        noise_spike_temps = np.array([noise_cell.spikeTemp for noise_cell in noise_cells], dtype=object)
+        
+        np.save(path / "noise_cell_ids.npy", noise_cell_ids)
+        np.save(path / "noise_cell_positions.npy", noise_cell_positions)
+        np.save(path / "noise_cell_spike_times.npy", noise_spike_times)
+        np.save(path / "noise_cell_spike_amplitudes.npy", noise_spike_amps)
+        np.save(path / "noise_cell_spike_templates.npy", noise_spike_temps)
 
 def convert_sites_for_kilosort(sites: list[Site]) -> dict:
     """
