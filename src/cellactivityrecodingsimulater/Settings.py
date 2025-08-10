@@ -21,11 +21,15 @@ class Settings(BaseModel):
     pathSitesOfTruthNoise: Optional[Path] = None
 
     spikeType: str # "gabor", "truth", "template"
+    # truth
     pathSpikeList: Optional[Path] = None
     isRandomSelect: bool
-    gaborSigmaList: Optional[list[float]] = None # msec
-    gaborf0List: Optional[list[float]] = None # Hz
-    gaborthetaList: Optional[list[float]] = None # rad
+
+    # gabor
+    randType: str = "list" # "list", "range"
+    gaborSigma: Optional[float] = None # msec
+    gaborf0: Optional[float] = None # Hz
+    gabortheta: Optional[float] = None # rad
     spikeWidth: Optional[float] = None # msec
     spikeAmpMax: Optional[float] = None # uV
     spikeAmpMin: Optional[float] = None # uV
