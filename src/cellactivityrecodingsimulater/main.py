@@ -1,11 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import carsIO
-import tools
+
 import logging
 import argparse
-import glob
 from pathlib import Path
+
+from . import carsIO
+from .simulate import simulateBackgroundActivity, simulateSpikeTimes, simulateSpikeTemplate, simulateRandomNoise, simulateDrift, simulatePowerLineNoise
+from .generate import generateNoiseCells, generate_similar_templates_for_group
+from .calculate import calcSpikeAmp, calcScaledSpikeAmp, calcDistance
+from .tools import addSpikeToSignal, filterSignal
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
@@ -64,39 +68,39 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             pathSaveDir = example_dir / condition_name
         else:
             pathSaveDir = settings.pathSaveDir / condition_name
-        pathSaveDir.mkdir(parents=True, exist_ok=True)
+        pathSaveDir = tools.makeSaveDir(pathSaveDir)
         
         # ノイズの適用
         if settings.noiseType == "truth":
             for site in sites:
-                site.signalNoise = tools.getRecordingNoiseFromTruth(settings)
-                site.signalRaw = site.signalNoise.copy()
+                site.signalBGNoise = carsIO.loadNoiseFile(settings.pathNoiseFile)
         elif settings.noiseType == "normal" or settings.noiseType == "gaussian":
             for site in sites:
-                site.signalNoise = tools.simulateRecordingNoise(settings, settings.noiseType)
-                site.signalRaw = site.signalNoise.copy()
+                site.signalBGNoise = simulateRandomNoise(settings.duration, settings.fs, settings.noiseType, settings.noiseAmp)
         elif settings.noiseType == "model":
             # ノイズ細胞を生成してサイトに追加
-            noise_cells = tools.generateNoiseCells(settings, sites)
-            # モデルノイズの場合は初期信号をゼロで初期化
+            noise_cells = generateNoiseCells(settings.duration, settings.fs, sites, settings.margin, settings.density,
+            spikeAmpMax=settings.spikeAmpMax, spikeAmpMin=settings.spikeAmpMin, spikeType=settings.spikeType,
+            randType=settings.randType, gaborSigma=settings.gaborSigma, gaborf0=settings.gaborf0, gabortheta=settings.gabortheta,
+            spikeWidth=settings.spikeWidth)
             for site in sites:
-                site.signalBGNoise = tools.addNoiseCellsToSite(noise_cells, site, settings)
-                site.signalRaw = site.signalBGNoise.copy()
+                site.signalBGNoise = simulateBackgroundActivity(settings.duration, settings.fs, noise_cells, site, settings.attenTime)
         elif settings.noiseType == "none":
             for site in sites:
-                site.signalNoise = np.zeros(int(settings.duration * settings.fs))
-                site.signalRaw = np.zeros(int(settings.duration * settings.fs)).tolist()
+                site.signalBGNoise = np.zeros(int(settings.duration * settings.fs))
         else:
             raise ValueError(f"Invalid noise type: {settings.noiseType}")
         
         # スパイクテンプレートの読み込み
         if settings.spikeType == "gabor":
-            spikeTemplates = [tools.simulateSpikeTemplate(settings) for _ in range(len(cells))]
+            if settings.enable_template_similarity_control:
+                for groupID in cells.groupID.unique():
+                    spikeTemplates = generate_similar_templates_for_group(cells, settings, groupID)
+            else:
+                spikeTemplates = [simulateSpikeTemplate(settings.fs, settings.spikeType, settings.randType, settings.spikeWidth,
+                gaborSigma=settings.gaborSigma, gaborf0=settings.gaborf0, gabortheta=settings.gabortheta) for _ in range(len(cells))]
         elif settings.spikeType == "template":
-            # テンプレートファイルのパスを設定
-            template_file = example_dir / "templates" / f"{condition_name}.json"
-            if settings.pathSpikeList:
-                template_file = example_dir / settings.pathSpikeList.name
+            template_file = example_dir / settings.pathSpikeList.name
             if not template_file.exists():
                 logging.error(f"テンプレートファイルが見つかりません: {template_file}")
                 return False
@@ -106,39 +110,27 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         
         # 各セルの処理
         for i, cell in enumerate(cells):
-            cell.spikeTimeList = tools.simulateSpikeTimes(settings)
+            cell.spikeTemp = spikeTemplates[i]
+            cell.spikeTimeList = simulateSpikeTimes(settings.duration, settings.fs, settings.avgSpikeRate, settings.isRefractory, settings.refractoryPeriod)
             for t in cell.spikeTimeList:
-                cell.spikeAmpList.append(tools.calcSpikeAmp(settings))
-        
-        # スパイクテンプレートの割り当て（グループ別類似度制御付き）
-        if settings.spikeType == "gabor":
-            tools.assign_templates_to_cells(cells, settings)
-        else:
-            # テンプレートファイルから読み込んだ場合は従来通り
-            for i, cell in enumerate(cells):
-                cell.spikeTemp = spikeTemplates[i]
+                cell.spikeAmpList.append(calcSpikeAmp(settings.spikeAmpMax, settings.spikeAmpMin))
 
         # 信号生成
         logging.info("信号生成開始...")
-        for site in sites:
-            
+        drift = simulateDrift(settings.duration, settings.fs, settings.drift_type)
+        powerLineNoise = simulatePowerLineNoise(settings.duration, settings.fs, settings.power_line_frequency, settings.power_noise_amplitude)
+
+        for site in sites:        
             # メインの細胞のスパイクを追加
-            for cell_idx, cell in enumerate(cells):
-                scaledSpikeAmpList = tools.calcScaledSpikeAmp(cell, site, settings)
-                tools.addSpikeToSignal(cell, site, scaledSpikeAmpList)
+            for cell in cells:
+                scaledSpikeAmpList = calcScaledSpikeAmp(cell.spikeAmpList, calcDistance(cell, site), settings.attenTime)
+                spikeWithBGNoise = addSpikeToSignal(site.signalBGNoise, cell.spikeTimeList, cell.spikeTemp, scaledSpikeAmpList)
             
-            # ドリフトを追加（個別ドリフト）
-            site.signalRaw, site.signalDrift = tools.addDriftToSignal(site.signalRaw, settings, settings.drift_type)
-            
-            site.signalFiltered = tools.getFilteredSignal(site.signalRaw, settings.fs, 300, 3000)
-        
-        # 共通ドリフトを追加
-        if hasattr(settings, 'common_drift') and settings.common_drift:
-            tools.addCommonDriftToSites(sites, settings)
-        
-        # 共通電源ノイズを追加
-        if hasattr(settings, 'common_power_noise') and settings.common_power_noise:
-            tools.addCommonPowerNoiseToSites(sites, settings, settings.power_line_frequency)
+            site.signalRaw = spikeWithBGNoise + drift + powerLineNoise
+            site.signalNoise = site.signalBGNoise + powerLineNoise + drift
+            site.signalDrift = drift
+            site.signalPowerNoise = powerLineNoise
+            site.signalFiltered = filterSignal(site.signalRaw, settings.fs, 300, 3000)
 
         # データの保存
         carsIO.save_data(pathSaveDir, cells, sites, noise_cells)

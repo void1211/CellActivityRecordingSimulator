@@ -115,6 +115,17 @@ def load_spikeTemplates(path: Path) -> list[np.ndarray]:
         spikeTemplates.append(np.array(jspikeTemplates["spikeTemplate"][i]))
     return spikeTemplates
 
+def loadNoiseFile(path: Path) -> np.ndarray:
+    """真の録音ノイズを取得する"""
+    
+    try:
+        noise = np.load(path).astype(np.float64)
+        return noise
+    except FileNotFoundError:
+        logging.warning(f"File not found: {path}")
+        return None
+    
+
 def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: list[Cell]=None):
 
     # todo ファイル名を設定できるようにする
@@ -232,4 +243,5 @@ def save_probe_data(path: Path, sites: list[Site]):
     # JSON形式で保存
     with open(path / "KS_probe.json", "w") as f:
         json.dump(probe, f, indent=2)
+
 
