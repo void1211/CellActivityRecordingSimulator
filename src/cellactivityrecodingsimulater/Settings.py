@@ -20,10 +20,10 @@ class Settings(BaseModel):
     pathTruthNoise: Optional[Path] = None
     pathSitesOfTruthNoise: Optional[Path] = None
 
-    spikeType: str # "gabor", "truth", "template"
+    spikeType: str # "gabor", "truth", "template", "expoential"
     # truth
     pathSpikeList: Optional[Path] = None
-    isRandomSelect: bool
+    isRandomSelect: bool = False
 
     # gabor
     randType: str = "list" # "list", "range"
@@ -35,6 +35,17 @@ class Settings(BaseModel):
     spikeAmpMin: Optional[float] = None # uV
     attenTime: Optional[float] = None # msec
     
+    # exponential
+    randType: str = "list" # "list", "range"
+    ms_before: Optional[list[float]] = None # msec
+    ms_after: Optional[list[float]] = None # msec
+    negative_amplitude: Optional[list[float]] = None # uV
+    positive_amplitude: Optional[list[float]] = None # uV
+    depolarization_ms: Optional[list[float]] = None # msec
+    repolarization_ms: Optional[list[float]] = None # msec
+    recovery_ms: Optional[list[float]] = None # msec
+    smooth_ms: Optional[list[float]] = None # msec
+
     # スパイクテンプレート類似度制御設定
     enable_template_similarity_control: bool = False  # テンプレート類似度制御を有効にするかどうか
     min_cosine_similarity: float = 0.7  # 最小コサイン類似度（-1.0-1.0）
@@ -42,7 +53,7 @@ class Settings(BaseModel):
     similarity_control_attempts: int = 100  # 類似度制御の最大試行回数
     
     # ノイズ細胞生成設定
-    cell_density: float = 30000  # cells/mm³
+    density: float = 30000  # cells/mm³
     margin: float = 100  # μm
 
     random_seed: int = 0  # 乱数シード値（デフォルト0）
@@ -71,7 +82,7 @@ class Settings(BaseModel):
     @field_validator('spikeType')
     @classmethod
     def validate_spike_type(cls, v):
-        valid_types = ["gabor", "truth", "template"]
+        valid_types = ["gabor", "truth", "template", "exponential"]
         if v not in valid_types:
             raise ValueError(f"spikeType must be one of {valid_types}, got {v}")
         return v
@@ -122,19 +133,19 @@ class Settings(BaseModel):
                 errors.append(f"pathTruthNoise file does not exist: {self.pathTruthNoise}")
         
         elif self.noiseType == "model":
-            if self.cell_density <= 0:
-                errors.append("cell_density must be positive when noiseType is 'model'")
+            if self.density <= 0:
+                errors.append("density must be positive when noiseType is 'model'")
             if self.margin < 0:
                 errors.append("margin must be non-negative")
 
         # spikeTypeに応じた検証
         if self.spikeType == "gabor":
-            if self.gaborSigmaList is None or len(self.gaborSigmaList) == 0:
-                errors.append("gaborSigmaList is required when spikeType is 'gabor'")
-            if self.gaborf0List is None or len(self.gaborf0List) == 0:
-                errors.append("gaborf0List is required when spikeType is 'gabor'")
-            if self.gaborthetaList is None or len(self.gaborthetaList) == 0:
-                errors.append("gaborthetaList is required when spikeType is 'gabor'")
+            if self.gaborSigma is None:
+                errors.append("gaborSigma is required when spikeType is 'gabor'")
+            if self.gaborf0 is None:
+                errors.append("gaborf0 is required when spikeType is 'gabor'")
+            if self.gabortheta is None:
+                errors.append("gabortheta is required when spikeType is 'gabor'")
             if self.spikeWidth is None or self.spikeWidth <= 0:
                 errors.append("spikeWidth must be positive when spikeType is 'gabor'")
         
@@ -143,6 +154,24 @@ class Settings(BaseModel):
                 errors.append("pathSpikeList is required when spikeType is 'template'")
             elif not self.pathSpikeList.exists():
                 errors.append(f"pathSpikeList file does not exist: {self.pathSpikeList}")
+
+        elif self.spikeType == "exponential":
+            if self.ms_before is None or len(self.ms_before) == 0:
+                errors.append("ms_before must be positive when spikeType is 'exponential'")
+            if self.ms_after is None or len(self.ms_after) == 0:
+                errors.append("ms_after must be positive when spikeType is 'exponential'")
+            if self.negative_amplitude is None or len(self.negative_amplitude) == 0 :
+                errors.append("negative_amplitude must be positive when spikeType is 'exponential'")
+            if self.positive_amplitude is None or len(self.positive_amplitude) == 0:
+                errors.append("positive_amplitude must be positive when spikeType is 'exponential'")
+            if self.depolarization_ms is None or len(self.depolarization_ms) == 0:
+                errors.append("depolarization_ms must be positive when spikeType is 'exponential'")
+            if self.repolarization_ms is None or len(self.repolarization_ms) == 0:
+                errors.append("repolarization_ms must be positive when spikeType is 'exponential'")
+            if self.recovery_ms is None or len(self.recovery_ms) == 0:
+                errors.append("recovery_ms must be positive when spikeType is 'exponential'")
+            if self.smooth_ms is None or len(self.smooth_ms) == 0:
+                errors.append("smooth_ms must be positive when spikeType is 'exponential'")
 
         # 共通パラメータの検証
         if self.spikeAmpMax is not None and self.spikeAmpMin is not None:

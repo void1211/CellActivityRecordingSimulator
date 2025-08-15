@@ -1,14 +1,19 @@
 import json
 import numpy as np
-from pathlib import Path
+from pathlib import Path, WindowsPath
 import chardet
 import logging
+import os
 
 from pydantic import BaseModel
 
 from Site import Site
 from Cell import Cell
 from Settings import Settings
+
+# Windowsの場合はWindowsPathを使用
+if os.name == 'nt':
+    Path = WindowsPath
 
 def load_settings(path: str) -> Settings:
     # ファイルの存在確認
@@ -127,7 +132,18 @@ def loadNoiseFile(path: Path) -> np.ndarray:
     
 
 def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: list[Cell]=None):
-
+    # パラメータの検証
+    if not isinstance(path, Path):
+        raise TypeError(f"path must be a Path object, got {type(path)}")
+    
+    logging.info(f"データ保存開始: {path}")
+    
+    # ディレクトリが存在することを確認
+    if not path.exists():
+        logging.warning(f"保存先ディレクトリが存在しません: {path}")
+        path.mkdir(parents=True, exist_ok=True)
+        logging.info(f"保存先ディレクトリを作成しました: {path}")
+    
     # todo ファイル名を設定できるようにする
     # todo 必要事項全て保存できるようにする
     
@@ -163,13 +179,21 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: lis
     np.save(path / "group.npy", group)
     
     # バイナリファイルに保存（int16）
-    with open(path / "signalRaw.bin", "wb") as f:
-        signalRaw_int16.reshape((1,-1), order="F").tofile(f)
-    with open(path / "signalNoise.bin", "wb") as f:
-        signalNoise_int16.reshape((1,-1), order="F").tofile(f)
-    with open(path / "signalFiltered.bin", "wb") as f:
-        signalFiltered_int16.reshape((1,-1), order="F").tofile(f)
-
+    try:
+        with open(str(path / "signalRaw.bin"), "wb") as f:
+            signalRaw_int16.reshape((1,-1), order="F").tofile(f)
+        with open(str(path / "signalNoise.bin"), "wb") as f:
+            signalNoise_int16.reshape((1,-1), order="F").tofile(f)
+        with open(str(path / "signalFiltered.bin"), "wb") as f:
+            signalFiltered_int16.reshape((1,-1), order="F").tofile(f)
+    except PermissionError as e:
+        logging.error(f"ファイルが他のプログラムで開かれています: {e}")
+        logging.error("ファイルを閉じてから再実行してください")
+        raise
+    except OSError as e:
+        logging.error(f"ファイル保存でエラーが発生しました: {e}")
+        raise
+    
     cell_ids = np.array([cell.id for cell in cells])
     cell_positions = np.array([[cell.x, cell.y, cell.z] for cell in cells])
     spike_times = np.array([cell.spikeTimeList for cell in cells], dtype=object)
@@ -241,7 +265,15 @@ def save_probe_data(path: Path, sites: list[Site]):
     probe = convert_sites_for_kilosort(sites)
     
     # JSON形式で保存
-    with open(path / "KS_probe.json", "w") as f:
-        json.dump(probe, f, indent=2)
+    try:
+        with open(str(path / "KS_probe.json"), "w") as f:
+            json.dump(probe, f, indent=2)
+    except PermissionError as e:
+        logging.error(f"KS_probe.jsonファイルが他のプログラムで開かれています: {e}")
+        logging.error("ファイルを閉じてから再実行してください")
+        raise
+    except OSError as e:
+        logging.error(f"KS_probe.jsonファイル保存でエラーが発生しました: {e}")
+        raise
 
 

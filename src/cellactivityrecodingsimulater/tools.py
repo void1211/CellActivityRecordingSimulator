@@ -19,7 +19,7 @@ def makeSaveDir(pathSaveDir: Path) -> Path:
                     logging.info(f"別名で保存ディレクトリを作成: {pathSaveDir}")
                     break
                 counter += 1
-            return pathSaveDir    
+    return pathSaveDir    
 
 def addSpikeToSignal(signal: np.ndarray, spikeTimes: list[int], spikeTemp: list[float], SpikeAmpList: list[float]) -> np.ndarray:
     """スパイクを信号に追加する"""

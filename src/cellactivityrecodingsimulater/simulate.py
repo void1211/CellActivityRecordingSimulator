@@ -4,6 +4,7 @@ import logging
 from Cell import Cell
 from Site import Site
 from calculate import calcScaledSpikeAmp, calcDistance, gabor
+from spikeinterface.core.generate import generate_single_fake_waveform
 
 
 def simulateBackgroundActivity(duration: float, fs: float, noise_cells: list[Cell], site: Site, attenTime: float) -> list[float]:
@@ -97,6 +98,9 @@ def simulateRandomNoise(duration: float, fs: float, noiseType: str="normal", noi
 
 def simulateSpikeTemplate(fs: float, spikeType: str, randType: str, spikeWidth: float,
     gaborSigma: list[float]=None, gaborf0: list[float]=None, gabortheta: list[float]=None, 
+    ms_before: list[float]=None, ms_after: list[float]=None, negative_amplitude: list[float]=None,
+    positive_amplitude: list[float]=None, depolarization_ms: list[float]=None,
+    repolarization_ms: list[float]=None, recovery_ms: list[float]=None, smooth_ms: list[float]=None,
     ) -> list[float]:
     """スパイクテンプレートをシミュレートする"""
     if spikeType == "gabor":
@@ -110,12 +114,72 @@ def simulateSpikeTemplate(fs: float, spikeType: str, randType: str, spikeWidth: 
             gabortheta = np.random.uniform(gabortheta[0], gabortheta[1])
         else:
             raise ValueError(f"randType '{randType}' is not supported for template simulation")
-
+        
         gabortheta_rad = gabortheta * np.pi / 180
         spikeTemplate = gabor(gaborSigma, gaborf0, gabortheta_rad, fs, spikeWidth)
         return spikeTemplate
+
+    elif spikeType == "exponential":
+        if randType == "list":
+            ms_before = np.random.choice(ms_before)
+            ms_after = np.random.choice(ms_after)
+            negative_amplitude = np.random.choice(negative_amplitude)
+            positive_amplitude = np.random.choice(positive_amplitude)
+            depolarization_ms = np.random.choice(depolarization_ms)
+            repolarization_ms = np.random.choice(repolarization_ms)
+            recovery_ms = np.random.choice(recovery_ms)
+            smooth_ms = np.random.choice(smooth_ms)
+        elif randType == "range":
+            ms_before = np.random.uniform(ms_before[0], ms_before[1]) if len(ms_before) > 1 else ms_before[0]
+            ms_after = np.random.uniform(ms_after[0], ms_after[1]) if len(ms_after) > 1 else ms_after[0]
+            negative_amplitude = np.random.uniform(negative_amplitude[0], negative_amplitude[1]) if len(negative_amplitude) > 1 else negative_amplitude[0]
+            positive_amplitude = np.random.uniform(positive_amplitude[0], positive_amplitude[1]) if len(positive_amplitude) > 1 else positive_amplitude[0]
+            depolarization_ms = np.random.uniform(depolarization_ms[0], depolarization_ms[1]) if len(depolarization_ms) > 1 else depolarization_ms[0]
+            repolarization_ms = np.random.uniform(repolarization_ms[0], repolarization_ms[1]) if len(repolarization_ms) > 1 else repolarization_ms[0]
+            recovery_ms = np.random.uniform(recovery_ms[0], recovery_ms[1]) if len(recovery_ms) > 1 else recovery_ms[0]
+            smooth_ms = np.random.uniform(smooth_ms[0], smooth_ms[1]) if len(smooth_ms) > 1 else smooth_ms[0]
+        else:
+            raise ValueError(f"randType '{randType}' is not supported for template simulation")
+
+        spikeTemplate = simulateExponentialTemplate(
+            fs,
+            ms_before,
+            ms_after,
+            negative_amplitude,
+            positive_amplitude,
+            depolarization_ms,
+            repolarization_ms,
+            recovery_ms,
+            smooth_ms)
+        
+        return spikeTemplate
     else:
         raise ValueError(f"spikeType '{spikeType}' is not supported for template simulation")
+
+def simulateExponentialTemplate(
+        fs: float, 
+        ms_before: float, 
+        ms_after: float, 
+        negative_amplitude: float, 
+        positive_amplitude: float, 
+        depolarization_ms: float, 
+        repolarization_ms: float, 
+        recovery_ms: float, 
+        smooth_ms: float) -> list[float]:
+    
+    spikeTemplate = generate_single_fake_waveform(
+        sampling_frequency=fs,
+        ms_before=ms_before,
+        ms_after=ms_after,
+        negative_amplitude=negative_amplitude,
+        positive_amplitude=positive_amplitude,
+        depolarization_ms=depolarization_ms,
+        repolarization_ms=repolarization_ms,
+        recovery_ms=recovery_ms,
+        smooth_ms=smooth_ms)    
+    # ピークを絶対値１に調整
+    spikeTemplate = spikeTemplate / np.max(np.abs(spikeTemplate))
+    return spikeTemplate
 
 def simulateDrift(duration: float, fs: float, driftType: str = "linear", drift_amplitude: float = 50.0, drift_frequency: float = 0.1) -> np.ndarray:
     """ドリフト信号をシミュレートする"""
