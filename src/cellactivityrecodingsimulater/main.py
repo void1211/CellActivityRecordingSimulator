@@ -4,12 +4,16 @@ import matplotlib.pyplot as plt
 import logging
 import argparse
 from pathlib import Path
+import os
 
 from . import carsIO
 from .simulate import simulateBackgroundActivity, simulateSpikeTimes, simulateSpikeTemplate, simulateRandomNoise, simulateDrift, simulatePowerLineNoise
-from .generate import generateNoiseCells, generate_similar_templates_for_group
+from .generate import generateNoiseCells, generate_similar_templates
 from .calculate import calcSpikeAmp, calcScaledSpikeAmp, calcDistance
-from .tools import addSpikeToSignal, filterSignal
+from .tools import addSpikeToSignal, filterSignal, makeSaveDir
+
+# ベースディレクトリを固定
+BASE_DIR = Path("C:/Users/tanaka-users/tlab/tlab_yasui/2025/simulations")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
@@ -65,10 +69,13 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
 
         # 保存ディレクトリの作成
         if settings.pathSaveDir is None:
-            pathSaveDir = example_dir / condition_name
+            # ベースディレクトリを使用
+            pathSaveDir = BASE_DIR / example_dir.name / condition_name
         else:
-            pathSaveDir = settings.pathSaveDir / condition_name
-        pathSaveDir = tools.makeSaveDir(pathSaveDir)
+            # 設定で指定された場合はベースディレクトリからの相対パス
+            pathSaveDir = BASE_DIR / settings.pathSaveDir / condition_name
+        
+        saveDir = makeSaveDir(pathSaveDir)
         
         # ノイズの適用
         if settings.noiseType == "truth":
@@ -82,7 +89,10 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             noise_cells = generateNoiseCells(settings.duration, settings.fs, sites, settings.margin, settings.density,
             spikeAmpMax=settings.spikeAmpMax, spikeAmpMin=settings.spikeAmpMin, spikeType=settings.spikeType,
             randType=settings.randType, gaborSigma=settings.gaborSigma, gaborf0=settings.gaborf0, gabortheta=settings.gabortheta,
-            spikeWidth=settings.spikeWidth)
+            ms_before=settings.ms_before, ms_after=settings.ms_after, negative_amplitude=settings.negative_amplitude,
+            positive_amplitude=settings.positive_amplitude, depolarization_ms=settings.depolarization_ms,
+            repolarization_ms=settings.repolarization_ms, recovery_ms=settings.recovery_ms, smooth_ms=settings.smooth_ms,
+            spikeWidth=settings.spikeWidth, rate=settings.avgSpikeRate, isRefractory=settings.isRefractory, refractoryPeriod=settings.refractoryPeriod)
             for site in sites:
                 site.signalBGNoise = simulateBackgroundActivity(settings.duration, settings.fs, noise_cells, site, settings.attenTime)
         elif settings.noiseType == "none":
@@ -92,28 +102,57 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             raise ValueError(f"Invalid noise type: {settings.noiseType}")
         
         # スパイクテンプレートの読み込み
-        if settings.spikeType == "gabor":
+        if settings.spikeType == "gabor" or settings.spikeType == "exponential":
             if settings.enable_template_similarity_control:
-                for groupID in cells.groupID.unique():
-                    spikeTemplates = generate_similar_templates_for_group(cells, settings, groupID)
+                group_ids = list(set([cell.group for cell in cells]))
+                for group_id in group_ids:
+                    group_cells = [cell for cell in cells if cell.group == group_id]
+                    spikeTemplates = generate_similar_templates(
+                        settings.fs, len(group_cells), 
+                        settings.spikeType, settings.randType, 
+                        settings.gaborSigma, settings.gaborf0, settings.gabortheta, 
+                        settings.ms_before, settings.ms_after, 
+                        settings.negative_amplitude, settings.positive_amplitude, 
+                        settings.depolarization_ms, settings.repolarization_ms, 
+                        settings.recovery_ms, settings.smooth_ms, 
+                        settings.spikeWidth,
+                        settings.min_cosine_similarity, settings.max_cosine_similarity, 
+                        settings.similarity_control_attempts)
+                    for i, cell in enumerate(group_cells):
+                        cell.spikeTemp = spikeTemplates[i]
+                        cell.spikeTimeList = simulateSpikeTimes(settings.duration, settings.fs, settings.avgSpikeRate, settings.isRefractory, settings.refractoryPeriod)
+                        for t in cell.spikeTimeList:
+                            cell.spikeAmpList.append(calcSpikeAmp(settings.spikeAmpMax, settings.spikeAmpMin))
             else:
-                spikeTemplates = [simulateSpikeTemplate(settings.fs, settings.spikeType, settings.randType, settings.spikeWidth,
-                gaborSigma=settings.gaborSigma, gaborf0=settings.gaborf0, gabortheta=settings.gabortheta) for _ in range(len(cells))]
+                spikeTemplates = [simulateSpikeTemplate(
+                    settings.fs, settings.spikeType, settings.randType, settings.spikeWidth,
+                    gaborSigma=settings.gaborSigma, gaborf0=settings.gaborf0, gabortheta=settings.gabortheta,
+                    ms_before=settings.ms_before, ms_after=settings.ms_after,
+                    negative_amplitude=settings.negative_amplitude, positive_amplitude=settings.positive_amplitude,
+                    depolarization_ms=settings.depolarization_ms, 
+                    repolarization_ms=settings.repolarization_ms, 
+                    recovery_ms=settings.recovery_ms, 
+                    smooth_ms=settings.smooth_ms
+                ) for _ in range(len(cells))]
+                for i, cell in enumerate(cells):
+                    cell.spikeTemp = spikeTemplates[i]
+                    cell.spikeTimeList = simulateSpikeTimes(settings.duration, settings.fs, settings.avgSpikeRate, settings.isRefractory, settings.refractoryPeriod)
+                    for t in cell.spikeTimeList:
+                        cell.spikeAmpList.append(calcSpikeAmp(settings.spikeAmpMax, settings.spikeAmpMin))
+
         elif settings.spikeType == "template":
             template_file = example_dir / settings.pathSpikeList.name
             if not template_file.exists():
                 logging.error(f"テンプレートファイルが見つかりません: {template_file}")
                 return False
             spikeTemplates = carsIO.load_spikeTemplates(template_file)
+            for i, cell in enumerate(cells):
+                cell.spikeTemp = spikeTemplates[i]
+                cell.spikeTimeList = simulateSpikeTimes(settings.duration, settings.fs, settings.avgSpikeRate, settings.isRefractory, settings.refractoryPeriod)
+                for t in cell.spikeTimeList:
+                    cell.spikeAmpList.append(calcSpikeAmp(settings.spikeAmpMax, settings.spikeAmpMin))
         else:
             raise ValueError(f"Invalid spike type: {settings.spikeType}")
-        
-        # 各セルの処理
-        for i, cell in enumerate(cells):
-            cell.spikeTemp = spikeTemplates[i]
-            cell.spikeTimeList = simulateSpikeTimes(settings.duration, settings.fs, settings.avgSpikeRate, settings.isRefractory, settings.refractoryPeriod)
-            for t in cell.spikeTimeList:
-                cell.spikeAmpList.append(calcSpikeAmp(settings.spikeAmpMax, settings.spikeAmpMin))
 
         # 信号生成
         logging.info("信号生成開始...")
@@ -122,9 +161,10 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
 
         for site in sites:        
             # メインの細胞のスパイクを追加
+            spikeWithBGNoise = site.signalBGNoise
             for cell in cells:
                 scaledSpikeAmpList = calcScaledSpikeAmp(cell.spikeAmpList, calcDistance(cell, site), settings.attenTime)
-                spikeWithBGNoise = addSpikeToSignal(site.signalBGNoise, cell.spikeTimeList, cell.spikeTemp, scaledSpikeAmpList)
+                spikeWithBGNoise = addSpikeToSignal(spikeWithBGNoise, cell.spikeTimeList, cell.spikeTemp, scaledSpikeAmpList)
             
             site.signalRaw = spikeWithBGNoise + drift + powerLineNoise
             site.signalNoise = site.signalBGNoise + powerLineNoise + drift
@@ -133,8 +173,16 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             site.signalFiltered = filterSignal(site.signalRaw, settings.fs, 300, 3000)
 
         # データの保存
-        carsIO.save_data(pathSaveDir, cells, sites, noise_cells)
-        logging.info(f"データ保存完了: {pathSaveDir}")
+        logging.info(f"保存先ディレクトリ: {saveDir}")
+        logging.info(f"saveDirの型: {type(saveDir)}")
+        logging.info(f"saveDirの絶対パス: {saveDir.absolute() if hasattr(saveDir, 'absolute') else 'N/A'}")
+        
+        if saveDir is None:
+            logging.error("保存先ディレクトリがNoneです。データ保存をスキップします。")
+            return False
+            
+        carsIO.save_data(saveDir, cells, sites, noise_cells)
+        logging.info(f"データ保存完了: {saveDir}")
 
         # プロット表示（オプション）
         if show_plot:
@@ -146,28 +194,33 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             plt.figure(figsize=(12, 8))
             
             # 生信号
-            plt.subplot(5, 1, 1)
+            plt.subplot(6, 1, 1)
             plt.plot(sites[0].signalRaw[tstart:tend])
             plt.title(f'Raw Signal - {condition_name}')
             plt.ylabel('Amplitude')
             
             # フィルタ済み信号
-            plt.subplot(5, 1, 2)
+            plt.subplot(6, 1, 2)
             plt.plot(sites[0].signalFiltered[tstart:tend])
             plt.title(f'Filtered Signal - {condition_name}')
             plt.ylabel('Amplitude')
 
-            plt.subplot(5, 1, 3)
+            plt.subplot(6, 1, 3)
+            plt.plot(sites[0].signalRaw[tstart:tend] - sites[0].signalFiltered[tstart:tend])
+            plt.title(f'BG Noise Signal - {condition_name}')
+            plt.ylabel('Amplitude')
+
+            plt.subplot(6, 1, 4)
             plt.plot(sites[0].signalNoise[tstart:tend])
             plt.title(f'Noise Signal - {condition_name}')
             plt.ylabel('Amplitude')
 
-            plt.subplot(5, 1, 4)
+            plt.subplot(6, 1, 5)
             plt.plot(sites[0].signalDrift[tstart:tend])
             plt.title(f'Drift Signal - {condition_name}')
             plt.ylabel('Amplitude')
 
-            plt.subplot(5, 1, 5)
+            plt.subplot(6, 1, 6)
             plt.plot(sites[0].signalPowerNoise[tstart:tend])
             plt.title(f'Power Line Noise - {condition_name}')
             plt.ylabel('Amplitude')
@@ -176,17 +229,17 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             plt.show()
             
             # ISIプロットを表示
-            if len(cells) > 0:
-                tools.plotMultipleCellISI(cells, settings.fs)
+            # if len(cells) > 0:
+            #     tools.plotMultipleCellISI(cells, settings.fs)
                 
-                # 最初の細胞の詳細ISIプロットも表示
-                if len(cells) > 0 and len(cells[0].spikeTimeList) > 1:
-                    tools.plotISI(cells[0].spikeTimeList, settings.fs, cell_id=cells[0].id)
+            #     # 最初の細胞の詳細ISIプロットも表示
+            #     if len(cells) > 0 and len(cells[0].spikeTimeList) > 1:
+            #         tools.plotISI(cells[0].spikeTimeList, settings.fs, cell_id=cells[0].id)
                     
-                    # 不応期効果の可視化
-                    if settings.isRefractory:
-                        tools.plotRefractoryEffect(cells[0].spikeTimeList, settings.fs, 
-                                                settings.refractoryPeriod, cell_id=cells[0].id)
+            #         # 不応期効果の可視化
+            #         if settings.isRefractory:
+            #             tools.plotRefractoryEffect(cells[0].spikeTimeList, settings.fs, 
+            #                                     settings.refractoryPeriod, cell_id=cells[0].id)
         
         logging.info(f"=== 実験完了: {condition_name} ===")
         return True
@@ -198,7 +251,8 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
 def main(example_dir: str, condition_pattern: str = "*", show_plot: bool = True):
     """メイン関数 - 複数の条件を実行"""
     try:
-        example_dir = Path(example_dir)
+        # ベースディレクトリからの相対パスとして扱う
+        example_dir = BASE_DIR / example_dir
         
         if not example_dir.exists():
             logging.error(f"実験ディレクトリが見つかりません: {example_dir}")
