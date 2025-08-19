@@ -1,0 +1,40 @@
+{
+    "name": "test_example_condition",
+    "pathSaveDir": null,
+
+    "fs": 30000,
+    "duration": 10,
+
+    "avgSpikeRate": 10,
+    "isRefractory": true,
+    "refractoryPeriod": 3,
+    "absolute_refractory_ratio": 1.0,
+
+    "noiseType": "model",
+    "noiseAmp": 10,
+
+    "spikeType": "gabor",
+    "isRandomSelect": true,
+    "randType": "list",
+    "gaborSigma": [0.4, 0.5, 0.6],
+    "gaborf0": [300, 400, 500],
+    "gabortheta": [0, 45, 90, 135, 180, 225, 270, 315],
+    "spikeWidth": 4,
+    "spikeAmpMax": 100,
+    "spikeAmpMin": 90,
+    "attenTime": 25,
+
+    "enable_template_similarity_control": true,
+    "min_cosine_similarity":0.7,
+    "max_cosine_similarity": 0.95,
+    "similarity_control_attempts": 100,
+
+    "enable_drift": true,
+    "drift_type": "linear",
+    "drift_amplitude": 50.0,
+    "drift_frequency": 0.1,
+
+    "enable_power_noise": true,
+    "power_line_frequency": 50.0,
+    "power_noise_amplitude": 20.0
+}
