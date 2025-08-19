@@ -9,16 +9,21 @@ class Settings(BaseModel):
     fs: float
     duration: float # sec
 
+    random_seed: int = 0  # 乱数シード値（デフォルト0）
+
     avgSpikeRate: float 
     isRefractory: bool
     refractoryPeriod: float # msec
-    absolute_refractory_ratio: float = 0.4  # 絶対不応期の割合（0.0-1.0）
-    relative_refractory_prob: float = 0.3   # 相対不応期の発火確率（0.0-1.0）
+    absolute_refractory_ratio: float = 0.4
 
     noiseType: str # "none", "normal", "gaussian", "truth", "model"
     noiseAmp: Optional[float] = None # uV
     pathTruthNoise: Optional[Path] = None
     pathSitesOfTruthNoise: Optional[Path] = None
+    # ノイズ細胞生成設定
+    density: float = 30000  # cells/mm³
+    margin: float = 100  # μm
+
 
     spikeType: str # "gabor", "truth", "template", "expoential"
     # truth
@@ -27,9 +32,9 @@ class Settings(BaseModel):
 
     # gabor
     randType: str = "list" # "list", "range"
-    gaborSigma: Optional[float] = None # msec
-    gaborf0: Optional[float] = None # Hz
-    gabortheta: Optional[float] = None # rad
+    gaborSigma: Optional[list[float]] = None # msec
+    gaborf0: Optional[list[float]] = None # Hz
+    gabortheta: Optional[list[float]] = None # rad
     spikeWidth: Optional[float] = None # msec
     spikeAmpMax: Optional[float] = None # uV
     spikeAmpMin: Optional[float] = None # uV
@@ -51,25 +56,17 @@ class Settings(BaseModel):
     min_cosine_similarity: float = 0.7  # 最小コサイン類似度（-1.0-1.0）
     max_cosine_similarity: float = 0.95  # 最大コサイン類似度（-1.0-1.0）
     similarity_control_attempts: int = 100  # 類似度制御の最大試行回数
-    
-    # ノイズ細胞生成設定
-    density: float = 30000  # cells/mm³
-    margin: float = 100  # μm
-
-    random_seed: int = 0  # 乱数シード値（デフォルト0）
 
     # ドリフト設定
     enable_drift: bool = False  # ドリフトを有効にするかどうか
     drift_type: str = "linear"  # "linear", "exponential", "oscillatory", "random_walk", "step"
     drift_amplitude: float = 50.0  # μV
     drift_frequency: float = 0.1  # Hz (oscillatory drift用)
-    common_drift: bool = True  # 電極全体で共通したドリフトを使用するかどうか
 
     # 電源ノイズ設定
     enable_power_noise: bool = False  # 電源ノイズを有効にするかどうか
     power_line_frequency: float = 50.0  # Hz (50Hz or 60Hz)
     power_noise_amplitude: float = 20.0  # μV
-    common_power_noise: bool = True  # 電極全体で共通した電源ノイズを使用するかどうか
 
     @field_validator('noiseType')
     @classmethod

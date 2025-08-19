@@ -27,6 +27,12 @@ def parse_args():
         action='store_true',
         help='Disable plot display'
     )
+
+    parser.add_argument(
+        '--test', '-t',
+        action='store_true',
+        help='Test mode'
+    )
     
     args = parser.parse_args()
     
@@ -46,4 +52,5 @@ from cellactivityrecodingsimulater.main import main
 
 if __name__ == "__main__":
     args = parse_args()
-    main(example_dir=args.example_dir, condition_pattern=args.conditions, show_plot=not args.no_plot) 
+    project_root = Path(__file__).parent
+    main(project_root=project_root, example_dir=args.example_dir, condition_pattern=args.conditions, show_plot=not args.no_plot, test=args.test) 
