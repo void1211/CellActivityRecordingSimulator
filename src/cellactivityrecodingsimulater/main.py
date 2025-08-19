@@ -13,11 +13,12 @@ from .calculate import calcSpikeAmp, calcScaledSpikeAmp, calcDistance
 from .tools import addSpikeToSignal, filterSignal, makeSaveDir
 
 # ベースディレクトリを固定
-BASE_DIR = Path("C:/Users/tanaka-users/tlab/tlab_yasui/2025/simulations")
+BASE_DIR = Path("simulations")
+TEST_DIR = Path("test")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-def run_single_experiment(example_dir: Path, condition_name: str, show_plot: bool = True):
+def run_single_experiment(example_dir: Path, condition_name: str, show_plot: bool = True, test: bool = False):
     """単一の実験を実行する"""
     try:
         logging.info(f"=== 実験開始: {condition_name} ===")
@@ -70,10 +71,16 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         # 保存ディレクトリの作成
         if settings.pathSaveDir is None:
             # ベースディレクトリを使用
-            pathSaveDir = BASE_DIR / example_dir.name / condition_name
+            if test:
+                pathSaveDir = TEST_DIR / example_dir.name / condition_name
+            else:
+                pathSaveDir = BASE_DIR / example_dir.name / condition_name
         else:
             # 設定で指定された場合はベースディレクトリからの相対パス
-            pathSaveDir = BASE_DIR / settings.pathSaveDir / condition_name
+            if test:
+                pathSaveDir = TEST_DIR / settings.pathSaveDir / condition_name
+            else:
+                pathSaveDir = BASE_DIR / settings.pathSaveDir / condition_name
         
         saveDir = makeSaveDir(pathSaveDir)
         
@@ -248,11 +255,14 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         logging.error(f"実験でエラー発生: {condition_name} - {e}", exc_info=True)
         return False
 
-def main(example_dir: str, condition_pattern: str = "*", show_plot: bool = True):
+def main(project_root: Path, example_dir: str, condition_pattern: str = "*", show_plot: bool = True, test: bool = False):
     """メイン関数 - 複数の条件を実行"""
     try:
         # ベースディレクトリからの相対パスとして扱う
-        example_dir = BASE_DIR / example_dir
+        if test:
+            example_dir = project_root / TEST_DIR / example_dir
+        else:
+            example_dir = project_root / BASE_DIR / example_dir
         
         if not example_dir.exists():
             logging.error(f"実験ディレクトリが見つかりません: {example_dir}")
@@ -281,7 +291,7 @@ def main(example_dir: str, condition_pattern: str = "*", show_plot: bool = True)
             # 最後の条件以外はプロットを無効化（オプション）
             current_show_plot = show_plot and (i == len(condition_names))
             
-            if run_single_experiment(example_dir, condition_name, current_show_plot):
+            if run_single_experiment(example_dir, condition_name, current_show_plot, test):
                 success_count += 1
             else:
                 logging.error(f"実験が失敗しました: {condition_name}")
