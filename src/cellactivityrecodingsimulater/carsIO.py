@@ -7,9 +7,9 @@ import os
 
 from pydantic import BaseModel
 
-from Site import Site
-from Cell import Cell
-from Settings import Settings
+from .Site import Site
+from .Cell import Cell
+from .Settings import Settings
 
 # Windowsの場合はWindowsPathを使用
 if os.name == 'nt':
