@@ -39,6 +39,7 @@ def parse_args():
 # プロジェクトルートをパスに追加
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root / "src" / "cellactivityrecodingsimulater"))
+sys.path.insert(1, str(Path("C:/Users/tanaka-users/tlab/tlab_yasui/2025/simulations")))
 
 # メインプログラムをインポートして実行
 from cellactivityrecodingsimulater.main import main
