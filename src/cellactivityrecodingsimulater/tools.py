@@ -32,7 +32,14 @@ def addSpikeToSignal(signal: np.ndarray, spikeTimes: list[int], spikeTemp: list[
         if signal.dtype != np.float64:
             signal = signal.astype(np.float64)
     
-    peak = np.argmax(np.abs(spikeTemp))
+    # ピーク位置を正しく計算（負のピークも考慮）
+    if np.min(spikeTemp) < 0 and abs(np.min(spikeTemp)) > abs(np.max(spikeTemp)):
+        # 負のピークが主成分の場合
+        peak = np.argmin(spikeTemp)
+    else:
+        # 正のピークが主成分の場合
+        peak = np.argmax(spikeTemp)
+    
     for spikeTime, spikeAmp in zip(spikeTimes, SpikeAmpList):
         start = int(spikeTime - peak)
         end = int(start + len(spikeTemp))

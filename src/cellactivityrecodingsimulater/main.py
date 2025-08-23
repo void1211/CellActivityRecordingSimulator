@@ -7,16 +7,15 @@ from pathlib import Path
 import os
 
 from . import carsIO
-from .simulate import simulateBackgroundActivity, simulateSpikeTimes, simulateSpikeTemplate, simulateRandomNoise, simulateDrift, simulatePowerLineNoise
+from .simulate import simulateBackgroundActivity, simulateSpikeTimes, simulateSpikeTemplate, simulateNormalRandomNoise, simulateGaussianRandomNoise, simulateDrift, simulatePowerLineNoise
 from .generate import generateNoiseCells, generate_similar_templates
 from .calculate import calcSpikeAmp, calcScaledSpikeAmp, calcDistance
 from .tools import addSpikeToSignal, filterSignal, makeSaveDir
-
 # ベースディレクトリを固定
 BASE_DIR = Path("simulations")
 TEST_DIR = Path("test")
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
 
 def run_single_experiment(example_dir: Path, condition_name: str, show_plot: bool = True, test: bool = False):
     """単一の実験を実行する"""
@@ -72,15 +71,9 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         if settings.pathSaveDir is None:
             # ベースディレクトリを使用
             if test:
-                pathSaveDir = TEST_DIR / example_dir.name / condition_name
+                pathSaveDir = example_dir / condition_name
             else:
-                pathSaveDir = BASE_DIR / example_dir.name / condition_name
-        else:
-            # 設定で指定された場合はベースディレクトリからの相対パス
-            if test:
-                pathSaveDir = TEST_DIR / settings.pathSaveDir / condition_name
-            else:
-                pathSaveDir = BASE_DIR / settings.pathSaveDir / condition_name
+                pathSaveDir = example_dir / condition_name
         
         saveDir = makeSaveDir(pathSaveDir)
         
@@ -88,12 +81,15 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         if settings.noiseType == "truth":
             for site in sites:
                 site.signalBGNoise = carsIO.loadNoiseFile(settings.pathNoiseFile)
-        elif settings.noiseType == "normal" or settings.noiseType == "gaussian":
+        elif settings.noiseType == "normal":    
             for site in sites:
-                site.signalBGNoise = simulateRandomNoise(settings.duration, settings.fs, settings.noiseType, settings.noiseAmp)
+                site.signalBGNoise = simulateNormalRandomNoise(settings.duration, settings.fs, settings.noiseAmp)
+        elif settings.noiseType == "gaussian":
+            for site in sites:
+                site.signalBGNoise = simulateGaussianRandomNoise(settings.duration, settings.fs, settings.noiseAmp, settings.noiseLoc, settings.noiseScale)
         elif settings.noiseType == "model":
             # ノイズ細胞を生成してサイトに追加
-            noise_cells = generateNoiseCells(settings.duration, settings.fs, sites, settings.margin, settings.density,
+            noise_cells = generateNoiseCells(settings.duration, settings.fs, sites, settings.margin, settings.density, settings.inviolableArea,
             spikeAmpMax=settings.spikeAmpMax, spikeAmpMin=settings.spikeAmpMin, spikeType=settings.spikeType,
             randType=settings.randType, gaborSigma=settings.gaborSigma, gaborf0=settings.gaborf0, gabortheta=settings.gabortheta,
             ms_before=settings.ms_before, ms_after=settings.ms_after, negative_amplitude=settings.negative_amplitude,
@@ -163,20 +159,26 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
 
         # 信号生成
         logging.info("信号生成開始...")
-        drift = simulateDrift(settings.duration, settings.fs, settings.drift_type)
-        powerLineNoise = simulatePowerLineNoise(settings.duration, settings.fs, settings.power_line_frequency, settings.power_noise_amplitude)
+        if settings.enable_drift:
+            drift = simulateDrift(settings.duration, settings.fs, settings.drift_type)
+        else:
+            drift = np.zeros(int(settings.duration * settings.fs))
+        if settings.enable_power_noise:
+            powerLineNoise = simulatePowerLineNoise(settings.duration, settings.fs, settings.power_line_frequency, settings.power_noise_amplitude)
+        else:
+            powerLineNoise = np.zeros(int(settings.duration * settings.fs))
 
         for site in sites:        
             # メインの細胞のスパイクを追加
-            spikeWithBGNoise = site.signalBGNoise
+            spikeWithBGNoise = site.signalBGNoise.copy()
             for cell in cells:
                 scaledSpikeAmpList = calcScaledSpikeAmp(cell.spikeAmpList, calcDistance(cell, site), settings.attenTime)
                 spikeWithBGNoise = addSpikeToSignal(spikeWithBGNoise, cell.spikeTimeList, cell.spikeTemp, scaledSpikeAmpList)
             
-            site.signalRaw = spikeWithBGNoise + drift + powerLineNoise
-            site.signalNoise = site.signalBGNoise + powerLineNoise + drift
-            site.signalDrift = drift
-            site.signalPowerNoise = powerLineNoise
+            site.signalRaw = np.array(spikeWithBGNoise) + np.array(drift) + np.array(powerLineNoise)
+            site.signalNoise = np.array(site.signalBGNoise) + np.array(powerLineNoise) + np.array(drift)
+            site.signalDrift = np.array(drift)
+            site.signalPowerNoise = np.array(powerLineNoise)
             site.signalFiltered = filterSignal(site.signalRaw, settings.fs, 300, 3000)
 
         # データの保存
@@ -188,52 +190,13 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             logging.error("保存先ディレクトリがNoneです。データ保存をスキップします。")
             return False
             
-        carsIO.save_data(saveDir, cells, sites, noise_cells)
+        carsIO.save_data(saveDir, cells, sites, noise_cells=(noise_cells if settings.noiseType == "model" else None))
         logging.info(f"データ保存完了: {saveDir}")
 
         # プロット表示（オプション）
         if show_plot:
-            
-            # プロット用の時間範囲を設定
-            tstart = 0
-            tend = min(300000, len(sites[0].signalRaw))  # 最初の1000サンプルを表示
-            
-            plt.figure(figsize=(12, 8))
-            
-            # 生信号
-            plt.subplot(6, 1, 1)
-            plt.plot(sites[0].signalRaw[tstart:tend])
-            plt.title(f'Raw Signal - {condition_name}')
-            plt.ylabel('Amplitude')
-            
-            # フィルタ済み信号
-            plt.subplot(6, 1, 2)
-            plt.plot(sites[0].signalFiltered[tstart:tend])
-            plt.title(f'Filtered Signal - {condition_name}')
-            plt.ylabel('Amplitude')
+            pass
 
-            plt.subplot(6, 1, 3)
-            plt.plot(sites[0].signalRaw[tstart:tend] - sites[0].signalFiltered[tstart:tend])
-            plt.title(f'BG Noise Signal - {condition_name}')
-            plt.ylabel('Amplitude')
-
-            plt.subplot(6, 1, 4)
-            plt.plot(sites[0].signalNoise[tstart:tend])
-            plt.title(f'Noise Signal - {condition_name}')
-            plt.ylabel('Amplitude')
-
-            plt.subplot(6, 1, 5)
-            plt.plot(sites[0].signalDrift[tstart:tend])
-            plt.title(f'Drift Signal - {condition_name}')
-            plt.ylabel('Amplitude')
-
-            plt.subplot(6, 1, 6)
-            plt.plot(sites[0].signalPowerNoise[tstart:tend])
-            plt.title(f'Power Line Noise - {condition_name}')
-            plt.ylabel('Amplitude')
-            
-            plt.tight_layout()
-            plt.show()
             
             # ISIプロットを表示
             # if len(cells) > 0:
