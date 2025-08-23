@@ -30,11 +30,11 @@
     "similarity_control_attempts": 100,
 
     "enable_drift": true,
-    "drift_type": "linear",
+    "drift_type": "random_walk",
     "drift_amplitude": 50.0,
     "drift_frequency": 0.1,
 
-    "enable_power_noise": true,
+    "enable_power_noise": false,
     "power_line_frequency": 50.0,
     "power_noise_amplitude": 20.0
 }

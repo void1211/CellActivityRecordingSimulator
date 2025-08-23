@@ -7,7 +7,7 @@ from .Settings import Settings
 from .simulate import simulateSpikeTimes, simulateSpikeTemplate
 from .calculate import calcSpikeAmp, calculateCosineSimilarity
 
-def generateNoiseCells(duration: float, fs: float, sites: list[Site], margin: float, density: float, 
+def generateNoiseCells(duration: float, fs: float, sites: list[Site], margin: float, density: float, inviolableArea: float,
 spikeAmpMax: float = 100, spikeAmpMin: float = 90, spikeType: str = "gabor", randType: str = "range",
 gaborSigma: list[float] = [0.2, 0.4], gaborf0: list[float] = [300, 500], gabortheta: list[float] = [0, 360],
 ms_before: list[float] = [1.0], ms_after: list[float] = [3.0], negative_amplitude: list[float] = [-1.0, -0.9],
@@ -58,10 +58,16 @@ spikeWidth: float = 4, rate: float = 10, isRefractory: bool = False, refractoryP
     # 細胞をランダムに配置
     noise_cells = []
     for i in range(cell_count):
-        # ランダムな位置を生成
-        x = np.random.uniform(min_x - margin, max_x + margin)
-        y = np.random.uniform(min_y - margin, max_y + margin)
-        z = np.random.uniform(min_z - margin, max_z + margin)
+        x, y, z = 0, 0, 0
+        while not (
+            min_x-inviolableArea <= x <= max_x+inviolableArea and
+            min_y-inviolableArea <= y <= max_y+inviolableArea and
+            min_z-inviolableArea <= z <= max_z+inviolableArea
+            ):
+            # ランダムな位置を生成
+            x = np.random.uniform(min_x - margin, max_x + margin)
+            y = np.random.uniform(min_y - margin, max_y + margin)
+            z = np.random.uniform(min_z - margin, max_z + margin)
         
         # 細胞を生成
         cell = Cell(

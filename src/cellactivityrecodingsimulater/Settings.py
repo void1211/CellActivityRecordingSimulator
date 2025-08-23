@@ -18,11 +18,14 @@ class Settings(BaseModel):
 
     noiseType: str # "none", "normal", "gaussian", "truth", "model"
     noiseAmp: Optional[float] = None # uV
+    noiseLoc: Optional[float] = None # uV
+    noiseScale: Optional[float] = None # uV
     pathTruthNoise: Optional[Path] = None
     pathSitesOfTruthNoise: Optional[Path] = None
     # ノイズ細胞生成設定
     density: float = 30000  # cells/mm³
     margin: float = 100  # μm
+    inviolableArea: float = 50  # mm² 
 
 
     spikeType: str # "gabor", "truth", "template", "expoential"
@@ -117,12 +120,21 @@ class Settings(BaseModel):
             errors.append("refractoryPeriod must be non-negative when isRefractory is true")
 
         # noiseTypeに応じた検証
-        if self.noiseType in ["normal", "gaussian"]:
+        if self.noiseType == "normal":
             if self.noiseAmp is None:
                 errors.append(f"noiseAmp is required when noiseType is {self.noiseType}")
             elif self.noiseAmp <= 0:
                 errors.append("noiseAmp must be positive")
-        
+        elif self.noiseType == "gaussian":
+            if self.noiseAmp is None:
+                errors.append(f"noiseAmp is required when noiseType is {self.noiseType}")
+            elif self.noiseAmp <= 0:
+                errors.append("noiseAmp must be positive")
+            if self.noiseLoc is None:
+                errors.append(f"noiseLoc is required when noiseType is {self.noiseType}")
+            if self.noiseScale is None:
+                errors.append(f"noiseScale is required when noiseType is {self.noiseType}")
+            
         elif self.noiseType == "truth":
             if self.pathTruthNoise is None:
                 errors.append("pathTruthNoise is required when noiseType is 'truth'")

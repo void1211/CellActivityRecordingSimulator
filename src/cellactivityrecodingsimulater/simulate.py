@@ -1,9 +1,9 @@
 import numpy as np
 import logging
 
-from Cell import Cell
-from Site import Site
-from calculate import calcScaledSpikeAmp, calcDistance, gabor
+from .Cell import Cell
+from .Site import Site
+from .calculate import calcScaledSpikeAmp, calcDistance, gabor
 from spikeinterface.core.generate import generate_single_fake_waveform
 
 
@@ -27,11 +27,24 @@ def simulateBackgroundActivity(duration: float, fs: float, noise_cells: list[Cel
     for cell_idx, cell in enumerate(noise_cells):
         # 各細胞からの信号を計算
         scaled_amps = calcScaledSpikeAmp(cell.spikeAmpList, calcDistance(cell, site), attenTime)
-        
         # スパイクを信号に追加
         spikeTimes = cell.spikeTimeList
         spikeTemp = cell.spikeTemp
-        peak = np.argmax(np.abs(spikeTemp))
+        
+        # ピーク位置を正しく計算（負のピークも考慮）
+        if np.min(spikeTemp) < 0 and abs(np.min(spikeTemp)) > abs(np.max(spikeTemp)):
+            # 負のピークが主成分の場合
+            peak = np.argmin(spikeTemp)
+            peak_type = "negative"
+        else:
+            # 正のピークが主成分の場合
+            peak = np.argmax(spikeTemp)
+            peak_type = "positive"
+        
+        # デバッグ情報（最初の5個の細胞のみ）
+        if cell_idx < 5:
+            logging.debug(f"  細胞{cell_idx}: ピークタイプ={peak_type}, ピーク位置={peak}, "
+                         f"テンプレート範囲=[{np.min(spikeTemp):.2f}, {np.max(spikeTemp):.2f}]")
         
         cell_added_spikes = 0
         for spikeTime, spikeAmp in zip(spikeTimes, scaled_amps):
@@ -84,16 +97,16 @@ def simulateSpikeTimes(duration:float, fs:float, rate:float, isRefractory:bool=F
         spikeTimes = spikeTimes[spikeTimes < int(duration * fs)]
         return spikeTimes
 
-def simulateRandomNoise(duration: float, fs: float, noiseType: str="normal", noiseAmp: float=1.0) -> list[float]:
+def simulateNormalRandomNoise(duration: float, fs: float, noiseAmp: float=1.0) -> list[float]:
     """ランダムノイズをシミュレートする"""
 
-    if noiseType == "normal":
-        noise = np.random.default_rng().integers(-noiseAmp, noiseAmp, size=int(duration * fs)).astype(np.float64)
-    elif noiseType == "gaussian":
-        noise = np.random.normal(-noiseAmp, noiseAmp, size=int(duration * fs)).astype(np.float64)
-    else:
-        raise ValueError(f"Invalid noise type: {noiseType}")
+    noise = np.random.default_rng().integers(-noiseAmp, noiseAmp, size=int(duration * fs)).astype(np.float64)
 
+    return noise
+
+def simulateGaussianRandomNoise(duration: float, fs: float, noiseAmp: float=1.0, loc: float=0.0, scale: float=1.0) -> list[float]:
+    """ガウスノイズをシミュレートする"""
+    noise = np.random.normal(loc, scale, size=int(duration * fs)).astype(np.float64) * noiseAmp
     return noise
 
 def simulateSpikeTemplate(fs: float, spikeType: str, randType: str, spikeWidth: float,
