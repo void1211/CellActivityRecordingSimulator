@@ -57,17 +57,32 @@ spikeWidth: float = 4, rate: float = 10, isRefractory: bool = False, refractoryP
     
     # 細胞をランダムに配置
     noise_cells = []
+    attempts = 0
+    max_attempts = 1000  # 無限ループ防止
+    
     for i in range(cell_count):
-        x, y, z = 0, 0, 0
-        while not (
-            min_x-inviolableArea <= x <= max_x+inviolableArea and
-            min_y-inviolableArea <= y <= max_y+inviolableArea and
-            min_z-inviolableArea <= z <= max_z+inviolableArea
-            ):
+        attempts = 0
+        while attempts < max_attempts:
+            attempts += 1
+            
             # ランダムな位置を生成
             x = np.random.uniform(min_x - margin, max_x + margin)
             y = np.random.uniform(min_y - margin, max_y + margin)
             z = np.random.uniform(min_z - margin, max_z + margin)
+            
+            # 禁止エリア外にあるかチェック（記録サイトの周囲inviolableAreaの距離内は禁止）
+            is_in_violable_area = False
+            for site in sites:
+                distance = np.sqrt((x - site.x)**2 + (y - site.y)**2 + (z - site.z)**2)
+                if distance <= inviolableArea:
+                    is_in_violable_area = True
+                    break
+            if not is_in_violable_area:
+                break  # 禁止エリア外ならループを抜ける
+        
+        if attempts >= max_attempts:
+            logging.warning(f"細胞 {i} の配置に失敗しました。最大試行回数に達しました。")
+            continue
         
         # 細胞を生成
         cell = Cell(
@@ -85,8 +100,8 @@ spikeWidth: float = 4, rate: float = 10, isRefractory: bool = False, refractoryP
             ms_before=ms_before, ms_after=ms_after, negative_amplitude=negative_amplitude,
             positive_amplitude=positive_amplitude, depolarization_ms=depolarization_ms,
             repolarization_ms=repolarization_ms, recovery_ms=recovery_ms, smooth_ms=smooth_ms)
-        
         noise_cells.append(cell)
+
     
     return noise_cells
 

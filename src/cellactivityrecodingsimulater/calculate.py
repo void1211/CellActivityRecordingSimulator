@@ -50,16 +50,3 @@ def calculateCosineSimilarity(template1: list[float], template2: list[float]) ->
     # 値を-1.0-1.0の範囲に制限
     return max(-1.0, min(1.0, similarity))
 
-def gabor(sigma: float, f0: float, theta: float, fs: float, spikeWidth: float) -> np.ndarray:
-    """ガボール関数を生成する"""
-    # spikeWidthはmsec単位、fsはHz単位
-    # 時間軸を正しく設定（秒単位）
-    x = np.linspace(-spikeWidth / 2, spikeWidth / 2, int(spikeWidth * fs / 1000))
-    x = x / 1000  # msecを秒に変換
-    
-    # sigmaもmsec単位なので秒に変換
-    sigma_sec = sigma / 1000
-    
-    y = np.exp(-x**2 / (2 * sigma_sec**2)) * np.cos(2 * np.pi * f0 * x + theta)
-    y = y / np.max(np.abs(y))
-    return y
