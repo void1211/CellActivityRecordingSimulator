@@ -1,14 +1,15 @@
-from pydantic import BaseModel
+from .BaseObject import BaseObject
 
-class Cell(BaseModel):
-    id: int
-    x: int
-    y: int
-    z: int
-    group: int = 0  # 細胞のグループID（デフォルトは0）
-    spikeTimeList: list[int] = []
-    spikeAmpList: list[float] = []
-    spikeTemp: list[float] = []
+class Cell(BaseObject):
+    def __init__(self, id: int, group: int = 0, **kwargs):
+        super().__init__(**kwargs)
+        assert self._check_id(id), "Invalid id"
+        assert self._check_group(group), "Invalid group"
+        self._id = id
+        self._group = group
+        self._spikeTimeList = []
+        self._spikeAmpList = []
+        self._spikeTemp = []
 
     def __str__(self):
         if len(self.spikeTimeList) <= 10:
@@ -19,6 +20,33 @@ class Cell(BaseModel):
 
     def __repr__(self):
         return self.__str__()
-        
+
+    @property
+    def group(self):
+        return self._group
+    
+    @group.setter
+    def group(self, value):
+        assert self._check_group(value), "Invalid group"
+        self._group = value
+
+    @property
+    def id(self):
+        return self._id
+    
+    @id.setter
+    def id(self, value):
+        assert self._check_id(value), "Invalid id"
+        self._id = value
+
+    def _check_id(self, value):
+        if not isinstance(value, int):
+            return False
+        return True
+
+    def _check_group(self, value):
+        if not isinstance(value, int):
+            return False
+        return True
 
         

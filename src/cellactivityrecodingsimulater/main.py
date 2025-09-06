@@ -11,11 +11,12 @@ from .simulate import simulateBackgroundActivity, simulateSpikeTimes, simulateSp
 from .generate import generateNoiseCells, generate_similar_templates
 from .calculate import calcSpikeAmp, calcScaledSpikeAmp, calcDistance
 from .tools import addSpikeToSignal, filterSignal, makeSaveDir
+from .plot.main import plot_main
 # ベースディレクトリを固定
 BASE_DIR = Path("simulations")
 TEST_DIR = Path("test")
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
 def run_single_experiment(example_dir: Path, condition_name: str, show_plot: bool = True, test: bool = False):
     """単一の実験を実行する"""
@@ -124,6 +125,7 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
                     for i, cell in enumerate(group_cells):
                         cell.spikeTemp = spikeTemplates[i]
                         cell.spikeTimeList = simulateSpikeTimes(settings.duration, settings.fs, settings.avgSpikeRate, settings.isRefractory, settings.refractoryPeriod)
+                        logging.debug(f"cell{cell.id}.spikeTimeList: {len(cell.spikeTimeList)}")
                         for t in cell.spikeTimeList:
                             cell.spikeAmpList.append(calcSpikeAmp(settings.spikeAmpMax, settings.spikeAmpMin))
             else:
@@ -195,22 +197,8 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
 
         # プロット表示（オプション）
         if show_plot:
-            pass
+            plot_main(cells, noise_cells, sites, condition_name, show_plot=show_plot)
 
-            
-            # ISIプロットを表示
-            # if len(cells) > 0:
-            #     tools.plotMultipleCellISI(cells, settings.fs)
-                
-            #     # 最初の細胞の詳細ISIプロットも表示
-            #     if len(cells) > 0 and len(cells[0].spikeTimeList) > 1:
-            #         tools.plotISI(cells[0].spikeTimeList, settings.fs, cell_id=cells[0].id)
-                    
-            #         # 不応期効果の可視化
-            #         if settings.isRefractory:
-            #             tools.plotRefractoryEffect(cells[0].spikeTimeList, settings.fs, 
-            #                                     settings.refractoryPeriod, cell_id=cells[0].id)
-        
         logging.info(f"=== 実験完了: {condition_name} ===")
         return True
         
@@ -218,9 +206,13 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         logging.error(f"実験でエラー発生: {condition_name} - {e}", exc_info=True)
         return False
 
-def main(project_root: Path, example_dir: str, condition_pattern: str = "*", show_plot: bool = True, test: bool = False):
+def main(project_root: Path, example_dir: str, condition_pattern: str = "*", show_plot: bool = True, test: bool = False, debug: bool = False):
     """メイン関数 - 複数の条件を実行"""
     try:
+        if debug:
+            logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
+        else:
+            logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
         # ベースディレクトリからの相対パスとして扱う
         if test:
             example_dir = project_root / TEST_DIR / example_dir

@@ -117,19 +117,7 @@ def simulateSpikeTemplate(fs: float, spikeType: str, randType: str, spikeWidth: 
     ) -> list[float]:
     """スパイクテンプレートをシミュレートする"""
     if spikeType == "gabor":
-        if randType == "list":
-            gaborSigma = np.random.choice(gaborSigma)
-            gaborf0 = np.random.choice(gaborf0)
-            gabortheta = np.random.choice(gabortheta)
-        elif randType == "range":
-            gaborSigma = np.random.uniform(gaborSigma[0], gaborSigma[1])
-            gaborf0 = np.random.uniform(gaborf0[0], gaborf0[1])
-            gabortheta = np.random.uniform(gabortheta[0], gabortheta[1])
-        else:
-            raise ValueError(f"randType '{randType}' is not supported for template simulation")
-        
-        gabortheta_rad = gabortheta * np.pi / 180
-        spikeTemplate = gabor(gaborSigma, gaborf0, gabortheta_rad, fs, spikeWidth)
+
         return spikeTemplate
 
     elif spikeType == "exponential":
@@ -169,30 +157,7 @@ def simulateSpikeTemplate(fs: float, spikeType: str, randType: str, spikeWidth: 
     else:
         raise ValueError(f"spikeType '{spikeType}' is not supported for template simulation")
 
-def simulateExponentialTemplate(
-        fs: float, 
-        ms_before: float, 
-        ms_after: float, 
-        negative_amplitude: float, 
-        positive_amplitude: float, 
-        depolarization_ms: float, 
-        repolarization_ms: float, 
-        recovery_ms: float, 
-        smooth_ms: float) -> list[float]:
-    
-    spikeTemplate = generate_single_fake_waveform(
-        sampling_frequency=fs,
-        ms_before=ms_before,
-        ms_after=ms_after,
-        negative_amplitude=negative_amplitude,
-        positive_amplitude=positive_amplitude,
-        depolarization_ms=depolarization_ms,
-        repolarization_ms=repolarization_ms,
-        recovery_ms=recovery_ms,
-        smooth_ms=smooth_ms)    
-    # ピークを絶対値１に調整
-    spikeTemplate = spikeTemplate / np.max(np.abs(spikeTemplate))
-    return spikeTemplate
+
 
 def simulateDrift(duration: float, fs: float, driftType: str = "linear", drift_amplitude: float = 50.0, drift_frequency: float = 0.1) -> np.ndarray:
     """ドリフト信号をシミュレートする"""

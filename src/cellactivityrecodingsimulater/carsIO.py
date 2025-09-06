@@ -84,6 +84,8 @@ def load_cells(path: Path) -> list[Cell]:
         # グループ情報が存在する場合は追加
         if has_groups:
             cell_data["group"] = jcells["group"][i]
+        else:
+            cell_data["group"] = 0
         
         cells.append(Cell(**cell_data))
     
@@ -104,6 +106,7 @@ def load_sites(path: Path) -> list[Site]:
                           x=jsites["x"][i], 
                           y=jsites["y"][i],
                           z=jsites["z"][i]))
+        logging.debug(f"Site {i}: {sites[i].__repr__()}")
     return sites
 
 def load_spikeTemplates(path: Path) -> list[np.ndarray]:
