@@ -5,39 +5,39 @@ from .spike_waveforms import plot_main as plot_spike_waveforms_main
 def plot_signals(sites, condition_name, start=0, end=15000, ch=0, dynamic=False):
     # プロット用の時間範囲を設定
     tstart = start
-    tend = min(end, len(sites[0].signalRaw))  # 最初の1000サンプルを表示
+    tend = min(end, len(sites[0].get_signal("raw")))  # 最初の1000サンプルを表示
     ch = ch
     fig = plt.figure(figsize=(12, 8))
 
     # 生信号
     ax_raw = fig.add_subplot(6, 1, 1)
-    line_raw, = ax_raw.plot(sites[ch].signalRaw[tstart:tend])
+    line_raw, = ax_raw.plot(sites[ch].get_signal("raw")[tstart:tend])
     ax_raw.set_title(f'Raw Signal - {condition_name}')
     ax_raw.set_ylabel('Amplitude')
 
     # フィルタ済み信号
     ax_bgnoise = fig.add_subplot(6, 1, 2)
-    line_bgnoise, = ax_bgnoise.plot(sites[ch].signalBGNoise[tstart:tend])
+    line_bgnoise, = ax_bgnoise.plot(sites[ch].get_signal("background")[tstart:tend])
     ax_bgnoise.set_title(f'BG Noise Signal - {condition_name}')
     ax_bgnoise.set_ylabel('Amplitude')
 
     ax_rawnoise = fig.add_subplot(6, 1, 3)
-    line_rawnoise, = ax_rawnoise.plot(sites[ch].signalRaw[tstart:tend] - sites[ch].signalNoise[tstart:tend])
+    line_rawnoise, = ax_rawnoise.plot(sites[ch].get_signal("raw")[tstart:tend] - sites[ch].get_signal("noise")[tstart:tend])
     ax_rawnoise.set_title(f'Raw-Noise - {condition_name}')
     ax_rawnoise.set_ylabel('Amplitude')
 
     ax_noise = fig.add_subplot(6, 1, 4)
-    line_noise, = ax_noise.plot(sites[ch].signalNoise[tstart:tend])
+    line_noise, = ax_noise.plot(sites[ch].get_signal("noise")[tstart:tend])
     ax_noise.set_title(f'Noise Signal - {condition_name}')
     ax_noise.set_ylabel('Amplitude')
 
     ax_drift = fig.add_subplot(6, 1, 5)
-    line_drift, = ax_drift.plot(sites[ch].signalDrift[tstart:tend])
+    line_drift, = ax_drift.plot(sites[ch].get_signal("drift")[tstart:tend])
     ax_drift.set_title(f'Drift Signal - {condition_name}')
     ax_drift.set_ylabel('Amplitude')
 
     ax_powernoise = fig.add_subplot(6, 1, 6)
-    line_powernoise, = ax_powernoise.plot(sites[ch].signalPowerNoise[tstart:tend])
+    line_powernoise, = ax_powernoise.plot(sites[ch].get_signal("power")[tstart:tend])
     ax_powernoise.set_title(f'Power Line Noise - {condition_name}')
     ax_powernoise.set_ylabel('Amplitude')
 
@@ -55,12 +55,12 @@ def plot_signals(sites, condition_name, start=0, end=15000, ch=0, dynamic=False)
                 if key is not None and key.key == 'q':
                     plt.close()
                     break
-            line_raw.set_data(np.arange(tstart, tend), sites[ch].signalRaw[tstart:tend])
-            line_bgnoise.set_data(np.arange(tstart, tend), sites[ch].signalBGNoise[tstart:tend])
-            line_rawnoise.set_data(np.arange(tstart, tend), sites[ch].signalRaw[tstart:tend] - sites[ch].signalNoise[tstart:tend])
-            line_noise.set_data(np.arange(tstart, tend), sites[ch].signalNoise[tstart:tend])
-            line_drift.set_data(np.arange(tstart, tend), sites[ch].signalDrift[tstart:tend])
-            line_powernoise.set_data(np.arange(tstart, tend), sites[ch].signalPowerNoise[tstart:tend])
+            line_raw.set_data(np.arange(tstart, tend), sites[ch].get_signal("raw")[tstart:tend])
+            line_bgnoise.set_data(np.arange(tstart, tend), sites[ch].get_signal("background")[tstart:tend])
+            line_rawnoise.set_data(np.arange(tstart, tend), sites[ch].get_signal("raw")[tstart:tend] - sites[ch].get_signal("noise")[tstart:tend])
+            line_noise.set_data(np.arange(tstart, tend), sites[ch].get_signal("noise")[tstart:tend])
+            line_drift.set_data(np.arange(tstart, tend), sites[ch].get_signal("drift")[tstart:tend])
+            line_powernoise.set_data(np.arange(tstart, tend), sites[ch].get_signal("power")[tstart:tend])
 
             ax_raw.set_xlim(tstart, tend)
             ax_bgnoise.set_xlim(tstart, tend)
@@ -69,12 +69,12 @@ def plot_signals(sites, condition_name, start=0, end=15000, ch=0, dynamic=False)
             ax_drift.set_xlim(tstart, tend)
             ax_powernoise.set_xlim(tstart, tend)
             
-            ax_raw.set_ylim(np.min(sites[ch].signalRaw), np.max(sites[ch].signalRaw))
-            ax_bgnoise.set_ylim(np.min(sites[ch].signalBGNoise), np.max(sites[ch].signalBGNoise))
-            ax_rawnoise.set_ylim(np.min(sites[ch].signalRaw[tstart:tend] - sites[ch].signalNoise[tstart:tend]), np.max(sites[ch].signalRaw[tstart:tend] - sites[ch].signalNoise[tstart:tend]))
-            ax_noise.set_ylim(np.min(sites[ch].signalNoise[tstart:tend]), np.max(sites[ch].signalNoise[tstart:tend]))
-            ax_drift.set_ylim(np.min(sites[ch].signalDrift[tstart:tend]), np.max(sites[ch].signalDrift[tstart:tend]))
-            ax_powernoise.set_ylim(np.min(sites[ch].signalPowerNoise[tstart:tend]), np.max(sites[ch].signalPowerNoise[tstart:tend]))
+            ax_raw.set_ylim(np.min(sites[ch].get_signal("raw")), np.max(sites[ch].get_signal("raw")))
+            ax_bgnoise.set_ylim(np.min(sites[ch].get_signal("background")), np.max(sites[ch].get_signal("background")))
+            ax_rawnoise.set_ylim(np.min(sites[ch].get_signal("raw")[tstart:tend] - sites[ch].get_signal("noise")[tstart:tend]), np.max(sites[ch].get_signal("raw")[tstart:tend] - sites[ch].get_signal("noise")[tstart:tend]))
+            ax_noise.set_ylim(np.min(sites[ch].get_signal("noise")[tstart:tend]), np.max(sites[ch].get_signal("noise")[tstart:tend]))
+            ax_drift.set_ylim(np.min(sites[ch].get_signal("drift")[tstart:tend]), np.max(sites[ch].get_signal("drift")[tstart:tend]))
+            ax_powernoise.set_ylim(np.min(sites[ch].get_signal("power")[tstart:tend]), np.max(sites[ch].get_signal("power")[tstart:tend]))
             
             plt.pause(0.01)
             fig.tight_layout()

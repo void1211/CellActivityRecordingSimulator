@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import logging
 from typing import List, Dict, Any, Tuple
-from ..calculate import calcDistance
+from ..calculate import calculate_distance_two_objects
 
 class TemplateWaveformVisualizer:
     """テンプレートベースの波形可視化クラス（元のコードを参考）"""
@@ -63,7 +63,7 @@ class TemplateWaveformVisualizer:
         nearby_sites = []
         
         for site in sites:
-            distance = calcDistance(cell, site)
+            distance = calculate_distance_two_objects(cell, site)
             if distance <= self.max_distance:
                 nearby_sites.append((site, distance))
         
@@ -106,7 +106,7 @@ class TemplateWaveformVisualizer:
             
             for site_idx, site in enumerate(sites):
                 waveforms = self.extract_spike_waveforms(
-                    site.signalRaw, cell.spikeTimeList, site.id, cell.id
+                    site.get_signal("raw"), cell.spikeTimeList, site.id, cell.id
                 )
                 
                 if waveforms:
@@ -365,7 +365,7 @@ class ProbeWaveformVisualizer:
         nearby_sites = []
         
         for site in sites:
-            distance = calcDistance(cell, site)
+            distance = calculate_distance_two_objects(cell, site)
             if distance <= self.max_distance:
                 nearby_sites.append((site, distance))
         
@@ -520,7 +520,7 @@ class SpikeWaveformPlotter:
         nearby_sites = []
         
         for site in sites:
-            distance = calcDistance(cell, site)
+            distance = calculate_distance_two_objects(cell, site)
             if distance <= self.max_distance:
                 nearby_sites.append((site, distance))
         
@@ -822,7 +822,7 @@ class SpikeWaveformPlotter:
         
         for cell in cells:
             for site in sites:
-                distance = calcDistance(cell, site)
+                distance = calculate_distance_two_objects(cell, site)
                 if distance <= self.max_distance:
                     waveforms = self.extract_spike_waveforms(
                         site.signalRaw, cell.spikeTimeList, site.id, cell.id

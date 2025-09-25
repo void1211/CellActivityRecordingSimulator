@@ -1,0 +1,47 @@
+{
+    "name": "test_example_condition2",
+    "pathSaveDir": null,
+
+    "fs": 30000,
+    "duration": 10,
+
+    "avgSpikeRate": 10,
+    "isRefractory": true,
+    "refractoryPeriod": 3,
+
+    "noiseType": "model",
+    "density": 30000,
+    "margin": 200,
+    "inviolableArea": 0,
+    "random_seed": 0,
+
+    "spikeType": "exponential",
+    "isRandomSelect": true,
+    "randType": "range",
+    "ms_before": [4.0],
+    "ms_after": [4.0],
+    "negative_amplitude": [-1.0,-0.9],
+    "positive_amplitude": [0.1, 0.3],
+    "depolarization_ms": [0.1,0.3],
+    "repolarization_ms": [0.4,1.0],
+    "recovery_ms": [0.8,2.5],
+    "smooth_ms": [0.05],
+
+    "spikeAmpMax": 100,
+    "spikeAmpMin": 90,
+    "attenTime": 25,
+
+    "enable_template_similarity_control": true,
+    "min_cosine_similarity":0.7,
+    "max_cosine_similarity": 0.95,
+    "similarity_control_attempts": 100,
+
+    "enable_drift": true,
+    "drift_type": "random_walk",
+    "drift_amplitude": 50.0,
+    "drift_frequency": 0.1,
+
+    "enable_power_noise": false,
+    "power_line_frequency": 50.0,
+    "power_noise_amplitude": 20.0
+}

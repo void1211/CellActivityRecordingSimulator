@@ -2,6 +2,11 @@
 
 class BaseObject():
     def __init__(self, x: float = 0, y: float = 0, z: float = 0):
+        """
+        x: float
+        y: float
+        z: float
+        """
         assert self._check_position(x, y, z), "Invalid position"
         self.set_position(x, y, z)
     
@@ -39,6 +44,13 @@ class BaseObject():
         self.set_position(self._x, self._y, value)
 
     def _check_position(self, x: float, y: float, z: float):
+        if isinstance(x, int):
+            x = float(x)
+        if isinstance(y, int):
+            y = float(y)
+        if isinstance(z, int):
+            z = float(z)
+        
         if not isinstance(x, float):
             return False
         if not isinstance(y, float):
@@ -48,7 +60,18 @@ class BaseObject():
         return True
 
     def set_position(self, x: float, y: float, z: float = 0):
+        """
+        x: float
+        y: float
+        z: float
+        """
         assert self._check_position(x, y, z), "Invalid position"
         self._x = x
         self._y = y
         self._z = z
+
+    def from_dict(self, data):
+        self._x = data["x"]
+        self._y = data["y"]
+        self._z = data["z"]
+        return self

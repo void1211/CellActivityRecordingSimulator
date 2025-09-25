@@ -1,10 +1,13 @@
 from .BaseObject import BaseObject
 import numpy as np
+from .tools import filterSignal
 
 class Site(BaseObject):
-    def __init__(self, id: int, **kwargs):
-        super().__init__(**kwargs)
-        assert self._check_id(id), "Invalid id"
+    def __init__(self, id: int=0, x: float=None, y: float=None, z: float=None):
+        if all(arg is not None for arg in [x, y, z]):
+            super().__init__(x=x, y=y, z=z)
+        else:
+            super().__init__()
         self._id = id
 
         self._signal_spike = []
@@ -32,11 +35,19 @@ class Site(BaseObject):
             return False
         return True
     
-    def set_signal(self, signal: np.ndarray, signal_type: str):
+    def set_signal(self, signal_type: str, signal: np.ndarray):
+        """
+        signal: np.ndarray or list
+        signal_type: str
+
+        signal_type: spike, drift, power, background
+        """
+        assert isinstance(signal_type, str), "Signal type must be a string"
         assert signal_type in ["spike", "drift", "power", "background"], "Invalid signal type"
-        if not isinstance(signal, np.ndarray) and isinstance(signal, list):
+
+        if isinstance(signal, list):
             signal = np.array(signal)
-        assert isinstance(signal, np.ndarray), "Signal must be a numpy array"
+        assert isinstance(signal, np.ndarray), "Signal must be a numpy array or list"
 
         if signal_type == "spike":
             self._signal_spike = signal
@@ -47,22 +58,33 @@ class Site(BaseObject):
         elif signal_type == "background":
             self._signal_background = signal
 
-    def get_signal(self, signal_type: str):
+    def get_signal(self, signal_type: str, fs: float=None) -> np.ndarray:
+        """
+        signal_type: spike, drift, power, background, raw, filtered, noise
+        return: np.ndarray or list
+        """
         assert signal_type in ["spike", "drift", "power", "background", "raw", "filtered", "noise"], "Invalid signal type"
         if signal_type == "spike":
-            return self._signal_spike
+            return np.array(self._signal_spike)
         elif signal_type == "drift":
-            return self._signal_drift
+            return np.array(self._signal_drift)
         elif signal_type == "power":
-            return self._signal_power
+            return np.array(self._signal_power)
         elif signal_type == "background":
-            return self._signal_background
+            return np.array(self._signal_background)
         elif signal_type == "raw":
-            return self._make_signal([self.get_signal("spike"), self.get_signal("drift"), self.get_signal("power"), self.get_signal("background")])  
-        # elif signal_type == "filtered":
-        #     return self._make_signal([self.get_signal("spike"), self.get_signal("drift"), self.get_signal("power"), self.get_signal("background")])
+            return np.array(self._make_signal([self.get_signal("spike"), self.get_signal("drift"), self.get_signal("power"), self.get_signal("background")]))  
+        elif signal_type == "filtered":
+            signal = np.array(self._make_signal([self.get_signal("spike"), self.get_signal("drift"), self.get_signal("power"), self.get_signal("background")]))
+            return filterSignal(signal, fs, 300, 3000)
         elif signal_type == "noise":
-            return self._make_signal([self.get_signal("drift"), self.get_signal("power"), self.get_signal("background")])
+            return np.array(self._make_signal([self.get_signal("drift"), self.get_signal("power"), self.get_signal("background")]))
 
     def _make_signal(self, signals: list[np.ndarray]):
-        return sum(np.array(signals))
+        return sum(signals)
+
+    def from_dict(self, data):
+        super().from_dict(data)
+
+        self._id = data.get("id", 0)
+        return self

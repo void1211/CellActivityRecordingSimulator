@@ -1,16 +1,16 @@
 import numpy as np
-import matplotlib.pyplot as plt
-
+import random
+from tqdm import tqdm
 import logging
 import argparse
 from pathlib import Path
-import os
 
-from . import carsIO
-from .simulate import simulateBackgroundActivity, simulateSpikeTimes, simulateSpikeTemplate, simulateNormalRandomNoise, simulateGaussianRandomNoise, simulateDrift, simulatePowerLineNoise
-from .generate import generateNoiseCells, generate_similar_templates
-from .calculate import calcSpikeAmp, calcScaledSpikeAmp, calcDistance
-from .tools import addSpikeToSignal, filterSignal, makeSaveDir
+from .carsIO import load_settings_file, load_cells_from_json, load_sites_from_json, save_data, load_noise_file, load_spike_templates
+from .Noise import RandomNoise, DriftNoise, PowerLineNoise
+from .Template import make_similar_templates, GaborTemplate, ExponentialTemplate
+from .generate import make_noise_cells, make_background_activity, make_spike_times
+from .calculate import calculate_spike_max_amplitude, calculate_scaled_spike_amplitude, calculate_distance_two_objects
+from .tools import addSpikeToSignal, makeSaveDir
 from .plot.main import plot_main
 # ベースディレクトリを固定
 BASE_DIR = Path("simulations")
@@ -33,8 +33,8 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             logging.error(f"設定ファイルが見つかりません: {settings_file}")
             return False
         
-        settings = carsIO.load_settings(settings_file)
-        logging.info(f"設定ファイル読み込み完了: {settings.name}")
+        settings = load_settings_file(settings_file)
+        logging.info(f"設定ファイル読み込み完了")
         
         # 設定の検証を実行
         logging.info("=== 設定検証開始 ===")
@@ -50,7 +50,7 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         logging.info("=== 設定検証完了 ===")
         
         # 乱数シードのセット
-        import random
+
         random.seed(settings.random_seed)
         np.random.seed(settings.random_seed)
         
@@ -58,14 +58,14 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         if not cell_file.exists():
             logging.error(f"セルファイルが見つかりません: {cell_file}")
             return False
-        cells = carsIO.load_cells(cell_file)
+        cells = load_cells_from_json(cell_file)
         logging.info(f"セルデータ読み込み完了: {len(cells)} cells")
         
         # サイトデータの読み込み
         if not site_file.exists():
             logging.error(f"サイトファイルが見つかりません: {site_file}")
             return False
-        sites = carsIO.load_sites(site_file)
+        sites = load_sites_from_json(site_file)
         logging.info(f"サイトデータ読み込み完了: {len(sites)} sites")
 
         # 保存ディレクトリの作成
@@ -78,32 +78,48 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
         
         saveDir = makeSaveDir(pathSaveDir)
         
+        template_parameters = {
+            "spikeType": settings.spikeType,
+            "randType": settings.randType,
+            "spikeAmpMax": settings.spikeAmpMax,
+            "spikeAmpMin": settings.spikeAmpMin,
+            "gaborSigma": settings.gaborSigma,
+            "gaborf0": settings.gaborf0,
+            "gabortheta": settings.gabortheta,
+            "ms_before": settings.ms_before,
+            "ms_after": settings.ms_after,
+            "negative_amplitude": settings.negative_amplitude,
+            "positive_amplitude": settings.positive_amplitude,
+            "depolarization_ms": settings.depolarization_ms,
+            "repolarization_ms": settings.repolarization_ms,
+            "recovery_ms": settings.recovery_ms,
+            "smooth_ms": settings.smooth_ms,
+            "spikeWidth": settings.spikeWidth,
+            "rate": settings.avgSpikeRate,
+            "isRefractory": settings.isRefractory,
+            "refractoryPeriod": settings.refractoryPeriod
+        }
         # ノイズの適用
         if settings.noiseType == "truth":
-            for site in sites:
-                site.signalBGNoise = carsIO.loadNoiseFile(settings.pathNoiseFile)
+            for site in tqdm(sites, total=len(sites)):
+                site.set_signal("background", load_noise_file(settings.pathNoiseFile))
         elif settings.noiseType == "normal":    
-            for site in sites:
-                site.signalBGNoise = simulateNormalRandomNoise(settings.duration, settings.fs, settings.noiseAmp)
+            for site in tqdm(sites, total=len(sites)):
+                site.set_signal("background", RandomNoise(settings.fs, settings.duration, settings.noiseAmp).generate("normal"))
         elif settings.noiseType == "gaussian":
-            for site in sites:
-                site.signalBGNoise = simulateGaussianRandomNoise(settings.duration, settings.fs, settings.noiseAmp, settings.noiseLoc, settings.noiseScale)
+            for site in tqdm(sites, total=len(sites)):
+                site.set_signal("background", RandomNoise(settings.fs, settings.duration, settings.noiseAmp, settings.noiseLoc, settings.noiseScale).generate("gaussian"))
         elif settings.noiseType == "model":
+
             # ノイズ細胞を生成してサイトに追加
-            noise_cells = generateNoiseCells(settings.duration, settings.fs, sites, settings.margin, settings.density, settings.inviolableArea,
-            spikeAmpMax=settings.spikeAmpMax, spikeAmpMin=settings.spikeAmpMin, spikeType=settings.spikeType,
-            randType=settings.randType, gaborSigma=settings.gaborSigma, gaborf0=settings.gaborf0, gabortheta=settings.gabortheta,
-            ms_before=settings.ms_before, ms_after=settings.ms_after, negative_amplitude=settings.negative_amplitude,
-            positive_amplitude=settings.positive_amplitude, depolarization_ms=settings.depolarization_ms,
-            repolarization_ms=settings.repolarization_ms, recovery_ms=settings.recovery_ms, smooth_ms=settings.smooth_ms,
-            spikeWidth=settings.spikeWidth, rate=settings.avgSpikeRate, isRefractory=settings.isRefractory, refractoryPeriod=settings.refractoryPeriod)
-            for site in sites:
-                site.signalBGNoise = simulateBackgroundActivity(settings.duration, settings.fs, noise_cells, site, settings.attenTime)
+            noise_cells = make_noise_cells(settings.duration, settings.fs, sites, settings.margin, settings.density, settings.inviolableArea, **template_parameters)
+            for site in tqdm(sites, total=len(sites)):
+                site.set_signal("background", make_background_activity(settings.duration, settings.fs, noise_cells, site, settings.attenTime))
         elif settings.noiseType == "none":
-            for site in sites:
-                site.signalBGNoise = np.zeros(int(settings.duration * settings.fs))
+            for site in tqdm(sites, total=len(sites)):
+                site.set_signal("background", np.zeros(int(settings.duration * settings.fs)))
         else:
-            raise ValueError(f"Invalid noise type: {settings.noiseType}")
+            raise ValueError(f"Invalid noise type")
         
         # スパイクテンプレートの読み込み
         if settings.spikeType == "gabor" or settings.spikeType == "exponential":
@@ -111,77 +127,61 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
                 group_ids = list(set([cell.group for cell in cells]))
                 for group_id in group_ids:
                     group_cells = [cell for cell in cells if cell.group == group_id]
-                    spikeTemplates = generate_similar_templates(
+                    spikeTemplates = make_similar_templates(
                         settings.fs, len(group_cells), 
-                        settings.spikeType, settings.randType, 
-                        settings.gaborSigma, settings.gaborf0, settings.gabortheta, 
-                        settings.ms_before, settings.ms_after, 
-                        settings.negative_amplitude, settings.positive_amplitude, 
-                        settings.depolarization_ms, settings.repolarization_ms, 
-                        settings.recovery_ms, settings.smooth_ms, 
-                        settings.spikeWidth,
                         settings.min_cosine_similarity, settings.max_cosine_similarity, 
-                        settings.similarity_control_attempts)
+                        settings.similarity_control_attempts, **template_parameters
+                        )
                     for i, cell in enumerate(group_cells):
                         cell.spikeTemp = spikeTemplates[i]
-                        cell.spikeTimeList = simulateSpikeTimes(settings.duration, settings.fs, settings.avgSpikeRate, settings.isRefractory, settings.refractoryPeriod)
+                        cell.spikeTimeList = make_spike_times(settings.duration, settings.fs, settings.avgSpikeRate, settings.refractoryPeriod)
                         logging.debug(f"cell{cell.id}.spikeTimeList: {len(cell.spikeTimeList)}")
                         for t in cell.spikeTimeList:
-                            cell.spikeAmpList.append(calcSpikeAmp(settings.spikeAmpMax, settings.spikeAmpMin))
+                            cell.spikeAmpList.append(calculate_spike_max_amplitude(settings.spikeAmpMax, settings.spikeAmpMin))
             else:
-                spikeTemplates = [simulateSpikeTemplate(
-                    settings.fs, settings.spikeType, settings.randType, settings.spikeWidth,
-                    gaborSigma=settings.gaborSigma, gaborf0=settings.gaborf0, gabortheta=settings.gabortheta,
-                    ms_before=settings.ms_before, ms_after=settings.ms_after,
-                    negative_amplitude=settings.negative_amplitude, positive_amplitude=settings.positive_amplitude,
-                    depolarization_ms=settings.depolarization_ms, 
-                    repolarization_ms=settings.repolarization_ms, 
-                    recovery_ms=settings.recovery_ms, 
-                    smooth_ms=settings.smooth_ms
-                ) for _ in range(len(cells))]
                 for i, cell in enumerate(cells):
-                    cell.spikeTemp = spikeTemplates[i]
-                    cell.spikeTimeList = simulateSpikeTimes(settings.duration, settings.fs, settings.avgSpikeRate, settings.isRefractory, settings.refractoryPeriod)
-                    for t in cell.spikeTimeList:
-                        cell.spikeAmpList.append(calcSpikeAmp(settings.spikeAmpMax, settings.spikeAmpMin))
+                    if settings.spikeType == "gabor":
+                        cell.spikeTemp = GaborTemplate(settings.fs, **template_parameters).generate()
+                    elif settings.spikeType == "exponential":
+                        cell.spikeTemp = ExponentialTemplate(settings.fs, **template_parameters).generate()
+                    else:
+                        raise ValueError(f"Invalid spike type")
+                    cell.spikeTimeList = make_spike_times(settings.duration, settings.fs, settings.avgSpikeRate, settings.refractoryPeriod)
+                    cell.spikeAmpList = [calculate_spike_max_amplitude(settings.spikeAmpMax, settings.spikeAmpMin) for _ in range(len(cell.spikeTimeList))]
 
         elif settings.spikeType == "template":
             template_file = example_dir / settings.pathSpikeList.name
             if not template_file.exists():
                 logging.error(f"テンプレートファイルが見つかりません: {template_file}")
                 return False
-            spikeTemplates = carsIO.load_spikeTemplates(template_file)
+            spikeTemplates = load_spike_templates(template_file)
             for i, cell in enumerate(cells):
                 cell.spikeTemp = spikeTemplates[i]
-                cell.spikeTimeList = simulateSpikeTimes(settings.duration, settings.fs, settings.avgSpikeRate, settings.isRefractory, settings.refractoryPeriod)
-                for t in cell.spikeTimeList:
-                    cell.spikeAmpList.append(calcSpikeAmp(settings.spikeAmpMax, settings.spikeAmpMin))
+                cell.spikeTimeList = make_spike_times(settings.duration, settings.fs, settings.avgSpikeRate, settings.refractoryPeriod)
+                cell.spikeAmpList = [calculate_spike_max_amplitude(settings.spikeAmpMax, settings.spikeAmpMin) for _ in range(len(cell.spikeTimeList))]
         else:
-            raise ValueError(f"Invalid spike type: {settings.spikeType}")
+            raise ValueError(f"Invalid spike type")
 
         # 信号生成
         logging.info("信号生成開始...")
         if settings.enable_drift:
-            drift = simulateDrift(settings.duration, settings.fs, settings.drift_type)
+            drift = DriftNoise(settings.fs, settings.duration, settings.drift_type, settings.drift_amplitude, settings.drift_frequency).generate()
         else:
             drift = np.zeros(int(settings.duration * settings.fs))
         if settings.enable_power_noise:
-            powerLineNoise = simulatePowerLineNoise(settings.duration, settings.fs, settings.power_line_frequency, settings.power_noise_amplitude)
+            powerLineNoise = PowerLineNoise(settings.fs, settings.duration, settings.power_line_frequency, settings.power_noise_amplitude).generate()
         else:
             powerLineNoise = np.zeros(int(settings.duration * settings.fs))
 
-        for site in sites:        
-            # メインの細胞のスパイクを追加
-            spikeWithBGNoise = site.signalBGNoise.copy()
+        for site in tqdm(sites, total=len(sites)):
+            spike = np.zeros(int(settings.duration * settings.fs))
             for cell in cells:
-                scaledSpikeAmpList = calcScaledSpikeAmp(cell.spikeAmpList, calcDistance(cell, site), settings.attenTime)
-                spikeWithBGNoise = addSpikeToSignal(spikeWithBGNoise, cell.spikeTimeList, cell.spikeTemp, scaledSpikeAmpList)
+                scaledSpikeAmpList = calculate_scaled_spike_amplitude(cell.spikeAmpList, calculate_distance_two_objects(cell, site), settings.attenTime)
+                spike = addSpikeToSignal(spike, cell.spikeTimeList, cell.spikeTemp, scaledSpikeAmpList)
+            site.set_signal("spike", spike)
+            site.set_signal("drift", drift)
+            site.set_signal("power", powerLineNoise)
             
-            site.signalRaw = np.array(spikeWithBGNoise) + np.array(drift) + np.array(powerLineNoise)
-            site.signalNoise = np.array(site.signalBGNoise) + np.array(powerLineNoise) + np.array(drift)
-            site.signalDrift = np.array(drift)
-            site.signalPowerNoise = np.array(powerLineNoise)
-            site.signalFiltered = filterSignal(site.signalRaw, settings.fs, 300, 3000)
 
         # データの保存
         logging.info(f"保存先ディレクトリ: {saveDir}")
@@ -192,7 +192,7 @@ def run_single_experiment(example_dir: Path, condition_name: str, show_plot: boo
             logging.error("保存先ディレクトリがNoneです。データ保存をスキップします。")
             return False
             
-        carsIO.save_data(saveDir, cells, sites, noise_cells=(noise_cells if settings.noiseType == "model" else None))
+        save_data(saveDir, cells, sites, noise_cells=(noise_cells if settings.noiseType == "model" else None), fs=settings.fs)
         logging.info(f"データ保存完了: {saveDir}")
 
         # プロット表示（オプション）
