@@ -44,13 +44,6 @@ class BaseObject():
         self.set_position(self._x, self._y, value)
 
     def _check_position(self, x: float, y: float, z: float):
-        if isinstance(x, int):
-            x = float(x)
-        if isinstance(y, int):
-            y = float(y)
-        if isinstance(z, int):
-            z = float(z)
-        
         if not isinstance(x, float):
             return False
         if not isinstance(y, float):
@@ -70,8 +63,8 @@ class BaseObject():
         self._y = y
         self._z = z
 
-    def from_dict(self, data):
-        self._x = data["x"]
-        self._y = data["y"]
-        self._z = data["z"]
+    def from_dict(self, json_data):
+        self._x = json_data["x"]
+        self._y = json_data["y"]
+        self._z = json_data["z"]
         return self

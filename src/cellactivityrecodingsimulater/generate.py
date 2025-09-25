@@ -1,19 +1,13 @@
 import numpy as np
 import logging
-
+from tqdm import tqdm
 from .Cell import Cell
 from .Site import Site
-from .Settings import Settings
-from .simulate import simulateSpikeTimes, simulateSpikeTemplate
-from .calculate import calcSpikeAmp, calculateCosineSimilarity
+from .calculate import calculate_spike_max_amplitude, calculate_scaled_spike_amplitude, calculate_distance_two_objects
 
-def generateNoiseCells(duration: float, fs: float, sites: list[Site], margin: float, density: float, inviolableArea: float,
-spikeAmpMax: float = 100, spikeAmpMin: float = 90, spikeType: str = "gabor", randType: str = "range",
-gaborSigma: list[float] = [0.2, 0.4], gaborf0: list[float] = [300, 500], gabortheta: list[float] = [0, 360],
-ms_before: list[float] = [1.0], ms_after: list[float] = [3.0], negative_amplitude: list[float] = [-1.0, -0.9],
-positive_amplitude: list[float] = [0.1, 0.2], depolarization_ms: list[float] = [0.05, 0.15],
-repolarization_ms: list[float] = [0.55, 0.65], recovery_ms: list[float] = [1.0, 1.2], smooth_ms: list[float] = [0.05],
-spikeWidth: float = 4, rate: float = 10, isRefractory: bool = False, refractoryPeriod: float = 3) -> list[Cell]:
+from .Template import GaborTemplate, ExponentialTemplate
+
+def make_noise_cells(duration: float, fs: float, sites: list[Site], margin: float, density: float, inviolableArea: float,**template_parameters) -> list[Cell]:
     """
     3次元空間上に背景活動を生成する細胞を配置する
     
@@ -23,18 +17,16 @@ spikeWidth: float = 4, rate: float = 10, isRefractory: bool = False, refractoryP
         sites: 記録サイトのリスト
         margin: 記録サイトの周囲のマージン
         density: 背景活動細胞の密度
-        spikeAmpMax: スパイク振幅の最大値
-        spikeAmpMin: スパイク振幅の最小値
-        spikeType: スパイクテンプレートのタイプ
-        randType: ガボール関数のシグマ、f0、thetaの生成タイプ
-        gaborSigma: ガボール関数のシグマ
-        gaborf0: ガボール関数のf0
-        gabortheta: ガボール関数のtheta
-        spikeWidth: スパイク幅
+        inviolableArea: 禁止エリアの半径
+        template_parameters: スパイクテンプレートのパラメータ
     Returns:
         list[Cell]: 生成された背景活動細胞のリスト
     """
-    
+    spikeType = template_parameters.get("spikeType", "gabor")
+    spikeAmpMax = template_parameters.get("spikeAmpMax", 100)
+    spikeAmpMin = template_parameters.get("spikeAmpMin", 90)
+    rate = template_parameters.get("rate", 10)
+    refractoryPeriod = template_parameters.get("refractoryPeriod", 2.0)
     # 記録サイトの範囲を計算
     site_x_coords = [site.x for site in sites]
     site_y_coords = [site.y for site in sites]
@@ -60,7 +52,8 @@ spikeWidth: float = 4, rate: float = 10, isRefractory: bool = False, refractoryP
     attempts = 0
     max_attempts = 1000  # 無限ループ防止
     
-    for i in range(cell_count):
+    logging.info(f"Generating {cell_count} noise cells...")
+    for i in tqdm(range(cell_count)):
         attempts = 0
         while attempts < max_attempts:
             attempts += 1
@@ -87,151 +80,115 @@ spikeWidth: float = 4, rate: float = 10, isRefractory: bool = False, refractoryP
         # 細胞を生成
         cell = Cell(
             id=i,
-            x=int(x),
-            y=int(y),
-            z=int(z)
+            x=x,
+            y=y,
+            z=z
         )
         
         # スパイク活動をシミュレート
-        cell.spikeTimeList = simulateSpikeTimes(duration, fs, rate, isRefractory, refractoryPeriod)
-        cell.spikeAmpList = [calcSpikeAmp(spikeAmpMax, spikeAmpMin) for _ in cell.spikeTimeList]
-        cell.spikeTemp = simulateSpikeTemplate(fs, spikeType, randType, spikeWidth,
-            gaborSigma=gaborSigma, gaborf0=gaborf0, gabortheta=gabortheta,
-            ms_before=ms_before, ms_after=ms_after, negative_amplitude=negative_amplitude,
-            positive_amplitude=positive_amplitude, depolarization_ms=depolarization_ms,
-            repolarization_ms=repolarization_ms, recovery_ms=recovery_ms, smooth_ms=smooth_ms)
+        cell.spikeTimeList = make_spike_times(duration, fs, rate, refractoryPeriod)
+        cell.spikeAmpList = [calculate_spike_max_amplitude(spikeAmpMax, spikeAmpMin) for _ in cell.spikeTimeList]
+        if spikeType == "gabor":  
+            cell.spikeTemp = GaborTemplate(fs, **template_parameters).generate()
+        elif spikeType == "exponential":
+            cell.spikeTemp = ExponentialTemplate(fs, **template_parameters).generate()
+        else:
+            raise ValueError(f"Invalid spikeType")
         noise_cells.append(cell)
 
     
     return noise_cells
 
-def generate_similar_templates(
-        fs: float, num_cells: int,
-        spikeType: str, randType: str, 
-        gaborSigma: list[float], gaborf0: list[float], gabortheta: list[float], 
-        ms_before: list[float], ms_after: list[float], 
-        negative_amplitude: list[float], positive_amplitude: list[float], 
-        depolarization_ms: list[float], repolarization_ms: list[float], recovery_ms: list[float], 
-        smooth_ms: list[float], 
-        spikeWidth: float,
-        min_cosine_similarity: float, max_cosine_similarity: float, similarity_control_attempts: int) -> list[list[float]]:
+def make_background_activity(duration: float, fs: float, noise_cells: list[Cell], site: Site, attenTime: float) -> list[float]:
     """
-    同じグループの細胞に対して類似度制御されたスパイクテンプレートを生成する
-    
-    Args:   
-        cells: 細胞のリスト
-        settings: シミュレーション設定
-        group_id: 対象のグループID
-    
-    Returns:
-        list[list[float]]: 生成されたテンプレートのリスト
-    """
-
-    
-    templates = []
-    
-    for i in range(num_cells):
-        if i == 0:
-            # 最初の細胞は基準テンプレートを生成
-            template = simulateSpikeTemplate(fs=fs, spikeType=spikeType, randType=randType,
-            gaborSigma=gaborSigma, gaborf0=gaborf0, gabortheta=gabortheta,
-            ms_before=ms_before, ms_after=ms_after, negative_amplitude=negative_amplitude,
-            positive_amplitude=positive_amplitude, depolarization_ms=depolarization_ms, 
-            repolarization_ms=repolarization_ms, recovery_ms=recovery_ms, smooth_ms=smooth_ms,
-            spikeWidth=spikeWidth)
-            templates.append(template)
-            logging.info(f"基準テンプレートを生成しました")
-        else:
-            # 2番目以降の細胞は類似度制御されたテンプレートを生成
-            template = generate_similar_template(
-                fs, spikeType, randType, gaborSigma, gaborf0, gabortheta, 
-                ms_before, ms_after, negative_amplitude, positive_amplitude, 
-                depolarization_ms, repolarization_ms, recovery_ms, smooth_ms, 
-                spikeWidth, templates[0], min_cosine_similarity, max_cosine_similarity, 
-                similarity_control_attempts)
-            templates.append(template)
-            similarity = calculateCosineSimilarity(templates[0], template)
-            logging.info(f"{i}番目のテンプレートを生成しました（類似度: {similarity:.3f})")
-    
-    return templates
-
-def generate_similar_template(
-        fs, 
-        spikeType, 
-        randType, 
-        gaborSigma, 
-        gaborf0, 
-        gabortheta, 
-        ms_before, 
-        ms_after, 
-        negative_amplitude, 
-        positive_amplitude, 
-        depolarization_ms, 
-        repolarization_ms, 
-        recovery_ms, 
-        smooth_ms, 
-        spikeWidth, 
-        base_template: list[float], 
-        min_similarity: float, max_similarity: float, max_attempts: int) -> list[float]:
-    """
-    基準テンプレートと類似度制御されたテンプレートを生成する
+    ノイズ細胞の活動を記録サイトの信号に追加する
     
     Args:
-        base_template: 基準テンプレート
-        settings: シミュレーション設定
-    
-    Returns:
-        list[float]: 類似度制御されたテンプレート
+        noise_cells: ノイズ細胞のリスト
+        sites: 記録サイトのリスト
+        attenTime: 減衰時間
     """
+    if not noise_cells:
+        logging.warning("ノイズ細胞が存在しません")
+        return
     
-    for attempt in range(max_attempts):
-        # 新しいテンプレートを生成（設定の制限を無視）
-        new_template = simulateSpikeTemplate(fs=fs, spikeType=spikeType, randType=randType,
-            gaborSigma=gaborSigma, gaborf0=gaborf0, gabortheta=gabortheta,
-            ms_before=ms_before, ms_after=ms_after, negative_amplitude=negative_amplitude,
-            positive_amplitude=positive_amplitude, depolarization_ms=depolarization_ms, 
-            repolarization_ms=repolarization_ms, recovery_ms=recovery_ms, smooth_ms=smooth_ms,
-            spikeWidth=spikeWidth)
-        
-        # 類似度を計算
-        similarity = calculateCosineSimilarity(base_template, new_template)
-        
-        # 類似度が指定範囲内にあるかチェック
-        if min_similarity <= similarity <= max_similarity:
-            return new_template
-        
-        # 反転させたテンプレートもチェック
-        inverted_template = -1.0 * new_template
-        inverted_similarity = calculateCosineSimilarity(base_template, inverted_template)
-        
-        # 反転させたテンプレートが指定範囲内にあるかチェック
-        if min_similarity <= inverted_similarity <= max_similarity:
-            return inverted_template
-        
+    # サイトの信号をnumpy配列に変換
+    site_signal = np.zeros(int(duration * fs))
     
-    # 最大試行回数に達した場合は、最も近いテンプレートを返す
-    logging.warning(f"類似度制御の最大試行回数（{max_attempts}）に達しました。最も範囲に近いテンプレートを使用します。")
-    
-    best_template = None
-    best_similarity = -1.0
-    
-    for _ in range(10):  # 最後の10回の試行
-        template = simulateSpikeTemplate(fs=fs, spikeType=spikeType, randType=randType,
-            gaborSigma=gaborSigma, gaborf0=gaborf0, gabortheta=gabortheta,
-            ms_before=ms_before, ms_after=ms_after, negative_amplitude=negative_amplitude,
-            positive_amplitude=positive_amplitude, depolarization_ms=depolarization_ms, 
-            repolarization_ms=repolarization_ms, recovery_ms=recovery_ms, smooth_ms=smooth_ms,
-            spikeWidth=spikeWidth)
-        similarity = calculateCosineSimilarity(base_template, template)
+    added_spikes = 0
+    logging.info(f"Adding spikes to site {site.id}...")
+    for cell_idx, cell in tqdm(enumerate(noise_cells), total=len(noise_cells)):
+        # 各細胞からの信号を計算
+        scaled_amps = calculate_scaled_spike_amplitude(cell.spikeAmpList, calculate_distance_two_objects(cell, site), attenTime)
+        # スパイクを信号に追加
+        spikeTimes = cell.spikeTimeList
+        spikeTemp = cell.spikeTemp
         
-        # 指定範囲の中央値からの距離を計算
-        target = (max_similarity + min_similarity) / 2
-        current_distance = abs(similarity - target)
+        # ピーク位置を正しく計算（負のピークも考慮）
+        if np.min(spikeTemp) < 0 and abs(np.min(spikeTemp)) > abs(np.max(spikeTemp)):
+            # 負のピークが主成分の場合
+            peak = np.argmin(spikeTemp)
+            peak_type = "negative"
+        else:
+            # 正のピークが主成分の場合
+            peak = np.argmax(spikeTemp)
+            peak_type = "positive"
         
-        # より中央値に近いテンプレートを保持
-        if best_template is None or current_distance < abs(best_similarity - target):
-            best_similarity = similarity
-            best_template = template
+        # デバッグ情報（最初の5個の細胞のみ）
+        if cell_idx < 5:
+            logging.debug(f"  細胞{cell_idx}: ピークタイプ={peak_type}, ピーク位置={peak}, "
+                         f"テンプレート範囲=[{np.min(spikeTemp):.2f}, {np.max(spikeTemp):.2f}]")
+        
+        cell_added_spikes = 0
+        for spikeTime, spikeAmp in zip(spikeTimes, scaled_amps):
+            start = int(spikeTime - peak)
+            end = int(start + len(spikeTemp))
+            if not (0 <= start and end <= len(site_signal)):
+                continue
+            site_signal[start:end] += spikeAmp * spikeTemp
+            cell_added_spikes += 1
+        
+        if cell_added_spikes > 0:
+            added_spikes += cell_added_spikes
+            if cell_idx < 5:  # 最初の5個の細胞のみログ出力
+                distance = calculate_distance_two_objects(cell, site)
+                logging.debug(f"  細胞{cell_idx}: 距離={distance:.2f}μm, 追加スパイク数={cell_added_spikes}")
     
-    return best_template
+    return site_signal.tolist()
+
+def make_spike_times(duration:float, fs:float, rate:float, refractoryPeriod:float=2.0) -> list[int]:
+    """セルのスパイク時間をシミュレートする"""
+
+    # より現実的な不応期モデル
+    if refractoryPeriod > 0:
+        # 絶対不応期のみを考慮
+        absolute_refractory = refractoryPeriod * 1.0  # 絶対不応期（100%）
+        
+        # スパイク時間を生成
+        spike_times = []
+        current_time = 0
+        
+        while current_time < duration * fs:
+            # 絶対不応期中はスパイクを発火できない
+            current_time += absolute_refractory * fs / 1000
+            
+            # 通常のスパイク間隔を生成
+            if current_time < duration * fs:
+                # 指数分布でスパイク間隔を生成
+                isi = np.random.exponential(1 / rate) 
+                current_time += isi * fs
+                
+                if current_time < duration * fs:
+                    spike_times.append(int(current_time))
+        
+        return spike_times
+    else:
+        # 不応期なしの場合（従来の実装）
+        isi = np.random.exponential(1 / rate, size=10000)
+        isi = np.ceil(isi * fs)
+        spikeTimes = np.cumsum(isi)
+        spikeTimes = spikeTimes[spikeTimes < int(duration * fs)]
+        return spikeTimes
+
+
 

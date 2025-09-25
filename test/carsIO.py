@@ -15,7 +15,7 @@ from .Settings import Settings
 if os.name == 'nt':
     Path = WindowsPath
 
-def load_settings_file(path: str) -> Settings:
+def load_settings(path: str) -> Settings:
     # ファイルの存在確認
     if not Path(path).exists():
         raise FileNotFoundError(f"設定ファイルが見つかりません: {path}")
@@ -59,7 +59,7 @@ def load_settings_file(path: str) -> Settings:
         print(f"その他のエラー: {e}")
         raise
     
-def load_cells_from_json(path: Path) -> list[Cell]:
+def load_cells(path: Path) -> list[Cell]:
     cells = []
     # ファイルのエンコーディングを自動検出
     with open(path, "rb") as f:
@@ -70,6 +70,9 @@ def load_cells_from_json(path: Path) -> list[Cell]:
     with open(path, "r", encoding=encoding) as f:
         jcells = json.load(f)
     
+    # グループ情報が存在するかチェック
+    has_groups = "group" in jcells
+    
     for i in range(len(jcells["id"])):
         cell_data = {
             "id": jcells["id"][i], 
@@ -78,11 +81,17 @@ def load_cells_from_json(path: Path) -> list[Cell]:
             "z": jcells["z"][i]
         }
         
-        cells.append(Cell().from_dict(cell_data))
+        # グループ情報が存在する場合は追加
+        if has_groups:
+            cell_data["group"] = jcells["group"][i]
+        else:
+            cell_data["group"] = 0
+        
+        cells.append(Cell(**cell_data))
     
     return cells
     
-def load_sites_from_json(path: Path) -> list[Site]:
+def load_sites(path: Path) -> list[Site]:
     sites = []
     # ファイルのエンコーディングを自動検出
     with open(path, "rb") as f:
@@ -93,41 +102,14 @@ def load_sites_from_json(path: Path) -> list[Site]:
     with open(path, "r", encoding=encoding) as f:
         jsites = json.load(f)
     for i in range(len(jsites["id"])):
-        site_data = {
-            "id": jsites["id"][i], 
-            "x": jsites["x"][i], 
-            "y": jsites["y"][i], 
-            "z": jsites["z"][i]
-        }
-        sites.append(Site().from_dict(site_data))
+        sites.append(Site(id=jsites["id"][i], 
+                          x=jsites["x"][i], 
+                          y=jsites["y"][i],
+                          z=jsites["z"][i]))
+        logging.debug(f"Site {i}: {sites[i].__repr__()}")
     return sites
 
-def load_sites_from_probeObject(probeObject) -> list[Site]:
-    sites = []
-    probe_dict = probeObject.to_dict()
-    site_positions = np.array(probe_dict["contact_positions"])
-    is_3d = True
-    if site_positions.shape[1] != 3:
-        is_3d = False
-    for i in range(len(site_positions)):
-        if is_3d:
-            site_data = {
-                "id": i,
-                "x": site_positions[i][0],
-                "y": site_positions[i][1],
-                "z": site_positions[i][2]
-            }
-        else:
-            site_data = {
-                "id": i,
-                "x": site_positions[i][0],
-                "y": site_positions[i][1],
-                "z": 0
-            }
-        sites.append(Site().from_dict(site_data))
-    return sites
-
-def load_spike_templates(path: Path) -> list[np.ndarray]:
+def load_spikeTemplates(path: Path) -> list[np.ndarray]:
     spikeTemplates = []
     # ファイルのエンコーディングを自動検出
     with open(path, "rb") as f:
@@ -141,7 +123,7 @@ def load_spike_templates(path: Path) -> list[np.ndarray]:
         spikeTemplates.append(np.array(jspikeTemplates["spikeTemplate"][i]))
     return spikeTemplates
 
-def load_noise_file(path: Path) -> np.ndarray:
+def loadNoiseFile(path: Path) -> np.ndarray:
     """真の録音ノイズを取得する"""
     
     try:
@@ -152,7 +134,7 @@ def load_noise_file(path: Path) -> np.ndarray:
         return None
     
 
-def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: list[Cell]=None, fs: float=None):
+def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: list[Cell]=None):
     # パラメータの検証
     if not isinstance(path, Path):
         raise TypeError(f"path must be a Path object, got {type(path)}")
@@ -168,13 +150,12 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: lis
     # todo ファイル名を設定できるようにする
     # todo 必要事項全て保存できるようにする
     
-    signalRaw = np.array([site.get_signal("raw") for site in sites])
-    signalNoise = np.array([site.get_signal("noise") for site in sites])
-    signalFiltered = np.array([site.get_signal("filtered", fs=fs) for site in sites])
-    signalPowerNoise = np.array([site.get_signal("power") for site in sites])
-    signalDrift = np.array([site.get_signal("drift") for site in sites])
-    signalBGNoise = np.array([site.get_signal("background") for site in sites])
-    signalSpike = np.array([site.get_signal("spike") for site in sites])
+    signalRaw = np.array([site.signalRaw for site in sites])
+    signalNoise = np.array([site.signalNoise for site in sites])
+    signalFiltered = np.array([site.signalFiltered for site in sites])
+    signalPowerNoise = np.array([site.signalPowerNoise for site in sites])
+    signalDrift = np.array([site.signalDrift for site in sites])
+    signalBGNoise = np.array([site.signalBGNoise for site in sites])
 
     # グループ情報を保存
     group = np.array([cell.group for cell in cells], dtype=object)
@@ -190,7 +171,7 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: lis
     signalPowerNoise_int16 = signalPowerNoise.astype(np.int16)
     signalDrift_int16 = signalDrift.astype(np.int16)
     signalBGNoise_int16 = signalBGNoise.astype(np.int16)
-    signalSpike_int16 = signalSpike.astype(np.int16)
+    
     # int16データを.npyファイルとして保存
     np.save(path / "signalRaw.npy", signalRaw_int16)
     np.save(path / "signalNoise.npy", signalNoise_int16)
@@ -198,7 +179,6 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: lis
     np.save(path / "signalPowerNoise.npy", signalPowerNoise_int16)
     np.save(path / "signalDrift.npy", signalDrift_int16)
     np.save(path / "signalBGNoise.npy", signalBGNoise_int16)
-    np.save(path / "signalSpike.npy", signalSpike_int16)
     np.save(path / "group.npy", group)
     
     # バイナリファイルに保存（int16）
@@ -209,14 +189,6 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: lis
             signalNoise_int16.reshape((1,-1), order="F").tofile(f)
         with open(str(path / "signalFiltered.bin"), "wb") as f:
             signalFiltered_int16.reshape((1,-1), order="F").tofile(f)
-        with open(str(path / "signalPowerNoise.bin"), "wb") as f:
-            signalPowerNoise_int16.reshape((1,-1), order="F").tofile(f)
-        with open(str(path / "signalDrift.bin"), "wb") as f:
-            signalDrift_int16.reshape((1,-1), order="F").tofile(f)
-        with open(str(path / "signalBGNoise.bin"), "wb") as f:
-            signalBGNoise_int16.reshape((1,-1), order="F").tofile(f)
-        with open(str(path / "signalSpike.bin"), "wb") as f:
-            signalSpike_int16.reshape((1,-1), order="F").tofile(f)
     except PermissionError as e:
         logging.error(f"ファイルが他のプログラムで開かれています: {e}")
         logging.error("ファイルを閉じてから再実行してください")
@@ -307,70 +279,4 @@ def save_probe_data(path: Path, sites: list[Site]):
         logging.error(f"KS_probe.jsonファイル保存でエラーが発生しました: {e}")
         raise
 
-#=============test=============
 
-class TestLoadCells():
-
-    def test_classinit(self):
-        cell_data ={
-            "id": 0,
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "group": 0
-        }   
-        cell1 = Cell(**cell_data)
-        print("cell(data):", cell1.__repr__() == "Cell(id=0, x=0, y=0, z=0, group=0)")
-
-        cell_data ={
-        "id": 0,
-        "x": 0,
-        "y": 0,
-        "z": 0,
-        }
-        cell2 = Cell(**cell_data)
-        print("cell(data):", cell2.__repr__() == "Cell(id=0, x=0, y=0, z=0, group=0)")
-
-    def test_from_dict(self):
-        cell_data ={
-            "id": 0,
-            "x": 0,
-            "y": 0,
-            "z": 0,
-            "group": 0
-        }  
-
-        cell1 = Cell().from_dict(cell_data)
-        print("Cell.from_dict(data):", cell1.__repr__() == "Cell(id=0, x=0, y=0, z=0, group=0)")
-
-        cell_data ={
-            "id": 0,
-            "x": 0,
-            "y": 0,
-            "z": 0,
-        }
-        cell2 = Cell().from_dict(cell_data)
-        print("Cell.from_dict(data):", cell2.__repr__() == "Cell(id=0, x=0, y=0, z=0, group=0)")
-
-class TestLoadSites():
-
-    def test_classinit(self):
-        site_data ={
-            "id": 0,
-            "x": 0,
-            "y": 0,
-            "z": 0,
-        }
-        site1 = Site(**site_data)
-        print("site(data):", site1.__repr__() == "Site(id=0, x=0, y=0, z=0)")
-
-    def test_from_dict(self):
-        site_data ={
-            "id": 0,
-            "x": 0,
-            "y": 0,
-            "z": 0,
-        }
-        site1 = Site().from_dict(site_data)
-        print("Site.from_dict(data):", site1.__repr__() == "Site(id=0, x=0, y=0, z=0)")
-  

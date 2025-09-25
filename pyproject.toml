@@ -12,6 +12,7 @@ dependencies = [
     "scipy>=1.15.3",
     "chardet>=5.2.0",
     "spikeinterface>=0.103.0",
+    "pytest>=8.4.2",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"
@@ -32,3 +33,9 @@ packages = ["src/cellactivityrecodingsimulater"]
 
 [tool.rye.scripts]
 main = "python main.py"
+
+[tool.pytest.ini_options]
+testpaths = ["src/cellactivityrecodingsimulater"]
+python_files = ["*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
