@@ -90,11 +90,11 @@ class ModelNoise(BaseSignal):
         self._cells = make_noise_cells(self.duration, self.fs, sites, margin, density, inviolableArea, **self._template_parameters)
 
 class DriftNoise(BaseSignal):
-    def __init__(self, fs: float, duration: float, driftType: str = "linear", driftAmplitude: float = 50.0, driftFrequency: float = 0.1):
+    def __init__(self, fs: float, duration: float, driftSettings: dict):
         super().__init__(fs, duration)
-        self._driftType = driftType
-        self._driftAmplitude = driftAmplitude
-        self._driftFrequency = driftFrequency
+        self._driftType = driftSettings["driftType"]
+        self._driftAmplitude = driftSettings.get(driftSettings["driftType"])["amplitude"]
+        self._driftFrequency = driftSettings.get(driftSettings["driftType"])["frequency"]
 
     def __repr__(self):
         return f"DriftNoise(fs={self.fs}, duration={self.duration})"
@@ -134,12 +134,12 @@ class DriftNoise(BaseSignal):
         if self.driftType == "linear":
             # 線形ドリフト（時間とともに直線的に変化）
             t = np.linspace(0, self.duration, signal_length)
-            drift = np.linspace(-self.driftAmplitude/2, self.driftAmplitude/2, signal_length)
+            drift = np.linspace(-self._driftAmplitude/2, self._driftAmplitude/2, signal_length)
             
         elif self.driftType == "exponential":
             # 指数関数的ドリフト（時間とともに指数関数的に変化）
             t = np.linspace(0, self.duration, signal_length)
-            drift = self.driftAmplitude * (np.exp(-t / (self.duration / 3)) - 0.5)
+            drift = self._driftAmplitude * (np.exp(-t / (self.duration / 3)) - 0.5)
             
         elif self.driftType == "oscillatory":
             # 振動的ドリフト（正弦波的な変化）

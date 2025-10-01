@@ -34,32 +34,37 @@ def load_settings_file(path: str) -> Settings:
     try:
         with open(path, "r", encoding=encoding) as f:
             content = f.read()
-            print(f"ファイル内容: {repr(content)}")
-            if not content.strip():
-                raise ValueError(f"ファイルが空です: {path}")
-            settings = Settings(**json.loads(content))
+            # logging.info(f"ファイル内容: {repr(content)}")
+            settings = Settings(json.loads(content))
+            logging.info(f"設定ファイル: {settings}")
+            # # 設定の検証を実行
+            # validation_summary = settings.get_validation_summary()
+            # logging.info(f"設定検証結果: {validation_summary}")
             
-            # 設定の検証を実行
-            validation_summary = settings.get_validation_summary()
-            logging.info(f"設定検証結果: {validation_summary}")
-            
-            # エラーがある場合は警告を出力（実行は継続）
-            errors = settings.validate_settings()
-            if errors:
-                logging.warning(f"設定に{len(errors)}個の警告がありますが、処理を継続します:")
-                for error in errors:
-                    logging.warning(f"  - {error}")
+            # # エラーがある場合は警告を出力（実行は継続）
+            # errors = settings.validate_settings()
+            # if errors:
+            #     logging.warning(f"設定に{len(errors)}個の警告がありますが、処理を継続します:")
+            #     for error in errors:
+            #         logging.warning(f"  - {error}")
             
             return settings
     except json.JSONDecodeError as e:
-        print(f"JSONデコードエラー: {e}")
-        print(f"ファイル内容: {repr(content)}")
+        logging.error(f"JSONデコードエラー: {e}")
+        logging.error(f"ファイル内容: {repr(content)}")
         raise
     except Exception as e:
-        print(f"その他のエラー: {e}")
+        logging.error(f"その他のエラー: {e}")
         raise
     
 def load_cells_from_json(path: Path) -> list[Cell]:
+
+    if not Path(path).exists():
+        raise FileNotFoundError(f"セルファイルが見つかりません: {path}")
+    
+    if Path(path).stat().st_size == 0:
+        raise ValueError(f"セルファイルが空です: {path}")
+    
     cells = []
     # ファイルのエンコーディングを自動検出
     with open(path, "rb") as f:
@@ -83,6 +88,13 @@ def load_cells_from_json(path: Path) -> list[Cell]:
     return cells
     
 def load_sites_from_json(path: Path) -> list[Site]:
+
+    if not Path(path).exists():
+        raise FileNotFoundError(f"サイトファイルが見つかりません: {path}")
+    
+    if Path(path).stat().st_size == 0:
+        raise ValueError(f"サイトファイルが空です: {path}")
+    
     sites = []
     # ファイルのエンコーディングを自動検出
     with open(path, "rb") as f:
