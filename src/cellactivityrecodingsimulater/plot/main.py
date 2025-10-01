@@ -115,7 +115,7 @@ def plot_cells(cells, noise_cells, sites,condition_name):
     ax.set_title(f'Cells - {condition_name}')
     return fig
 
-def plot_main(cells, noise_cells, sites, condition_name, show_plot=True, save_dir=None):
+def plot_main(cells, noise_cells, sites, condition_name, save_dir=None):
     """メインのプロット関数 - 既存のプロットと新しい波形プロットを統合"""
     
     figures = {}
@@ -133,7 +133,7 @@ def plot_main(cells, noise_cells, sites, condition_name, show_plot=True, save_di
         
         # 3. 新しいスパイク波形プロット
         print("スパイク波形プロットの作成中...")
-        waveform_figures = plot_spike_waveforms_main(cells, sites, condition_name, save_dir, show_plot)
+        waveform_figures = plot_spike_waveforms_main(cells, sites, condition_name, save_dir)
         if waveform_figures:
             figures.update(waveform_figures)
         
@@ -141,10 +141,8 @@ def plot_main(cells, noise_cells, sites, condition_name, show_plot=True, save_di
         print("細胞配置プロットの作成中...")
         cell_fig = plot_cells(cells, noise_cells, sites, condition_name)
         figures['cells'] = cell_fig
-        
-        # プロット表示
-        if show_plot:
-            plt.show()
+
+        plt.show()
         
         print("プロット作成完了")
         
@@ -155,5 +153,3 @@ def plot_main(cells, noise_cells, sites, condition_name, show_plot=True, save_di
     
     return figures
 
-if __name__ == "__main__":
-    main()

@@ -867,7 +867,7 @@ class SpikeWaveformPlotter:
         return fig
 
 def plot_main(cells: List[Any], sites: List[Any], condition_name: str = "", 
-              save_dir: Path = None, show_plot: bool = True) -> Dict[str, plt.Figure]:
+              save_dir: Path = None) -> Dict[str, plt.Figure]:
     """メインのプロット関数"""
     
     logging.info(f"スパイク波形プロット開始: 細胞数={len(cells)}, サイト数={len(sites)}")
@@ -909,9 +909,8 @@ def plot_main(cells: List[Any], sites: List[Any], condition_name: str = "",
         # if cell_probe_fig:
         #     figures['cell_waveforms_on_probe'] = cell_probe_fig
         
-        # プロット表示
-        if show_plot:
-            plt.show()
+ 
+        plt.show()
         
         logging.info("スパイク波形プロット完了")
         

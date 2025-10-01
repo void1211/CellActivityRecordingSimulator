@@ -7,7 +7,13 @@ from .calculate import calculate_spike_max_amplitude, calculate_scaled_spike_amp
 
 from .Template import GaborTemplate, ExponentialTemplate
 
-def make_noise_cells(duration: float, fs: float, sites: list[Site], margin: float, density: float, inviolableArea: float,**template_parameters) -> list[Cell]:
+def make_noise_cells(
+    duration: float, 
+    fs: float, 
+    sites: list[Site], 
+    spikeSettings: dict,
+    noiseSettings: dict
+    ) -> list[Cell]:
     """
     3次元空間上に背景活動を生成する細胞を配置する
     
@@ -22,11 +28,12 @@ def make_noise_cells(duration: float, fs: float, sites: list[Site], margin: floa
     Returns:
         list[Cell]: 生成された背景活動細胞のリスト
     """
-    spikeType = template_parameters.get("spikeType", "gabor")
-    spikeAmpMax = template_parameters.get("spikeAmpMax", 100)
-    spikeAmpMin = template_parameters.get("spikeAmpMin", 90)
-    rate = template_parameters.get("rate", 10)
-    refractoryPeriod = template_parameters.get("refractoryPeriod", 2.0)
+    spikeType = spikeSettings["spikeType"]
+    spikeAmpMax = spikeSettings["amplitudeMax"]
+    spikeAmpMin = spikeSettings["amplitudeMin"]
+    rate = spikeSettings["rate"]
+    refractoryPeriod = spikeSettings["refractoryPeriod"]
+    modelSettings = noiseSettings["model"]
     # 記録サイトの範囲を計算
     site_x_coords = [site.x for site in sites]
     site_y_coords = [site.y for site in sites]
@@ -37,15 +44,15 @@ def make_noise_cells(duration: float, fs: float, sites: list[Site], margin: floa
     min_z, max_z = min(site_z_coords), max(site_z_coords)
     
     # マージンを追加して配置範囲を拡張
-    volume_x = (max_x - min_x) + 2 * margin
-    volume_y = (max_y - min_y) + 2 * margin
-    volume_z = (max_z - min_z) + 2 * margin
+    volume_x = (max_x - min_x) + 2 * modelSettings["margin"]
+    volume_y = (max_y - min_y) + 2 * modelSettings["margin"]
+    volume_z = (max_z - min_z) + 2 * modelSettings["margin"]
     
     # 体積をmm³に変換（μm³ → mm³）
     volume_mm3 = (volume_x * volume_y * volume_z) / (1000**3)
     
     # 細胞数を計算（密度 × 体積）
-    cell_count = int(density * volume_mm3)
+    cell_count = int(modelSettings["density"] * volume_mm3)
     
     # 細胞をランダムに配置
     noise_cells = []
@@ -59,15 +66,15 @@ def make_noise_cells(duration: float, fs: float, sites: list[Site], margin: floa
             attempts += 1
             
             # ランダムな位置を生成
-            x = np.random.uniform(min_x - margin, max_x + margin)
-            y = np.random.uniform(min_y - margin, max_y + margin)
-            z = np.random.uniform(min_z - margin, max_z + margin)
+            x = np.random.uniform(min_x - modelSettings["margin"], max_x + modelSettings["margin"])
+            y = np.random.uniform(min_y - modelSettings["margin"], max_y + modelSettings["margin"])
+            z = np.random.uniform(min_z - modelSettings["margin"], max_z + modelSettings["margin"])
             
             # 禁止エリア外にあるかチェック（記録サイトの周囲inviolableAreaの距離内は禁止）
             is_in_violable_area = False
             for site in sites:
                 distance = np.sqrt((x - site.x)**2 + (y - site.y)**2 + (z - site.z)**2)
-                if distance <= inviolableArea:
+                if distance <= modelSettings["inviolableArea"]:
                     is_in_violable_area = True
                     break
             if not is_in_violable_area:
@@ -89,9 +96,9 @@ def make_noise_cells(duration: float, fs: float, sites: list[Site], margin: floa
         cell.spikeTimeList = make_spike_times(duration, fs, rate, refractoryPeriod)
         cell.spikeAmpList = [calculate_spike_max_amplitude(spikeAmpMax, spikeAmpMin) for _ in cell.spikeTimeList]
         if spikeType == "gabor":  
-            cell.spikeTemp = GaborTemplate(fs, **template_parameters).generate()
+            cell.spikeTemp = GaborTemplate(fs, spikeSettings).generate()
         elif spikeType == "exponential":
-            cell.spikeTemp = ExponentialTemplate(fs, **template_parameters).generate()
+            cell.spikeTemp = ExponentialTemplate(fs, spikeSettings).generate()
         else:
             raise ValueError(f"Invalid spikeType")
         noise_cells.append(cell)
