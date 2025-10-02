@@ -17,6 +17,15 @@ class CarsObject:
         self._sites = sites
         self._noise_cells = noise_cells
 
+    def __str__(self):
+        if self._noise_cells is None:
+            return f"{len(self._cells)} units - {len(self._sites)} ch - no noise units"
+        else:
+            return f"{len(self._cells)} units -{len(self._sites)} ch - using noise units"
+    
+    def __repr__(self):
+        return self.__str__()
+
     @property
     def settings(self):
         return self._settings
