@@ -160,7 +160,7 @@ class GaborSettings(BaseSettings):
                 errors.append("width error.")
         return errors
 
-class ExponentialSettings(BaseSettings):
+class ExponentialSpikeSettings(BaseSettings):
     
     def __init__(self, data: dict):
         super().__init__(data)
@@ -270,10 +270,11 @@ class SpikeSettings(BaseSettings):
         self.spikeType = data["spikeType"]
         self.amplitudeMax = data["amplitudeMax"]
         self.amplitudeMin = data["amplitudeMin"]
+        self.attenTime = data["attenTime"]
         if self.spikeType == "gabor":
             self.gabor = GaborSettings(data["gabor"])
         elif self.spikeType == "exponential":
-            self.exponential = ExponentialSettings(data["exponential"])
+            self.exponential = ExponentialSpikeSettings(data["exponential"])
         elif self.spikeType == "template":
             self.template = TemplateSettings(data["template"])
         elif self.spikeType == "truth":
@@ -404,7 +405,7 @@ class OscillatorySettings(BaseSettings):
             errors.append("frequency error.")
         return errors
 
-class ExponentialSettings(BaseSettings):
+class ExponentialDriftSettings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
         self.amplitude = data["amplitude"]
@@ -429,7 +430,7 @@ class DriftSettings(BaseSettings):
         elif self.driftType == "oscillatory":
             self.oscillatory = OscillatorySettings(data["oscillatory"])
         elif self.driftType == "exponential":
-            self.exponential = ExponentialSettings(data["exponential"])
+            self.exponential = ExponentialDriftSettings(data["exponential"])
 
     def validate(self) -> list[str]:
         errors = []
@@ -466,20 +467,20 @@ class TemplateSimilarityControlSettings(BaseSettings):
             errors.append("similarity_control_attempts must be positive")
         return errors
 
-class DriftSettings(BaseSettings):
-    def __init__(self, data: dict):
-        super().__init__(data)
-        self.enable = data["enable"]
-        self.driftType = data["driftType"]
-        self.randomWalk = RandomWalkSettings(data["random_walk"])
-        self.step = StepSettings(data["step"])
-        self.oscillatory = OscillatorySettings(data["oscillatory"])
-        self.exponential = ExponentialSettings(data["exponential"])
-    def validate(self) -> list[str]:
-        errors = []
-        if self.enable and self.driftType not in ["random_walk", "step", "oscillatory", "exponential"]:
-            errors.append("driftType error.")
-        return errors
+# class DriftSettings(BaseSettings):
+#     def __init__(self, data: dict):
+#         super().__init__(data)
+#         self.enable = data["enable"]
+#         self.driftType = data["driftType"]
+#         self.randomWalk = RandomWalkSettings(data["random_walk"])
+#         self.step = StepSettings(data["step"])
+#         self.oscillatory = OscillatorySettings(data["oscillatory"])
+#         self.exponential = ExponentialSettings(data["exponential"])
+#     def validate(self) -> list[str]:
+#         errors = []
+#         if self.enable and self.driftType not in ["random_walk", "step", "oscillatory", "exponential"]:
+#             errors.append("driftType error.")
+#         return errors
 
 class Settings(BaseSettings):
     def __init__(self, data: dict):

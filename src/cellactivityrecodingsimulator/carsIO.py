@@ -11,6 +11,7 @@ from .Site import Site
 from .Cell import Cell
 from .Settings import Settings
 from probeinterface import Probe
+from .tools import convert_legacySettings
 
 # Windowsの場合はWindowsPathを使用
 if os.name == 'nt':
@@ -34,9 +35,11 @@ def load_settings_file(path: str) -> Settings:
     
     try:
         with open(path, "r", encoding=encoding) as f:
-            content = f.read()
+            content = json.load(f)
             # logging.info(f"ファイル内容: {repr(content)}")
-            settings = Settings(json.loads(content))
+            if "baseSettings" not in content:
+                content = convert_legacySettings(content)
+            settings = Settings(content)
             logging.info(f"設定ファイル: {settings}")
             # # 設定の検証を実行
             # validation_summary = settings.get_validation_summary()

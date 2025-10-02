@@ -170,9 +170,10 @@ def run(dir: Path, settings:Path, cells:Path, probe:Path|Probe, plot: bool=False
                 for group_id in group_ids:
                     group_cells = [cell for cell in cells if cell.group == group_id]
                     spikeTemplates = make_similar_templates(
-                        baseSettings["fs"], len(group_cells), 
-                        templateSimilarityControlSettings["min_cosine_similarity"], templateSimilarityControlSettings["max_cosine_similarity"], 
-                        templateSimilarityControlSettings["similarity_control_attempts"], **spikeSettings
+                        baseSettings["fs"], 
+                        templateSimilarityControlSettings,
+                        spikeSettings,
+                        len(group_cells)
                         )
                     for i, cell in enumerate(group_cells):
                         cell.spikeTemp = spikeTemplates[i]
