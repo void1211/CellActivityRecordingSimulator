@@ -1,5 +1,5 @@
 [project]
-name = "cellactivityrecodingsimulater"
+name = "cellactivityrecodingsimulator"
 version = "0.1.0"
 description = "Add your description here"
 authors = [
@@ -29,13 +29,13 @@ dev-dependencies = []
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cellactivityrecodingsimulater"]
+packages = ["src/cellactivityrecodingsimulator"]
 
 [tool.rye.scripts]
 main = "python main.py"
 
 [tool.pytest.ini_options]
-testpaths = ["src/cellactivityrecodingsimulater"]
+testpaths = ["src/cellactivityrecodingsimulator"]
 python_files = ["*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
