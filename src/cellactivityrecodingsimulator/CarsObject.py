@@ -5,7 +5,8 @@ from .Site import Site
 
 
 class CarsObject:
-    def __int__(self, 
+    def __init__(
+    self, 
     settings: Settings, 
     cells: List[Cell], 
     sites: List[Site],
