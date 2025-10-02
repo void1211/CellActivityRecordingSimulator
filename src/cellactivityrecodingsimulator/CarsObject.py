@@ -59,7 +59,7 @@ class CarsObject:
                 "recording": {
                     "raw": [site.get_signal("raw") for site in self._sites],
                     "noise": [site.get_signal("noise") for site in self._sites],
-                    "filtered": [site.get_signal("filtered", fs=self._settings.fs) for site in self._sites],
+                    "filtered": [site.get_signal("filtered", fs=self._settings.to_dict()["baseSettings"]["fs"]) for site in self._sites],
                     "power": [site.get_signal("power") for site in self._sites],
                     "drift": [site.get_signal("drift") for site in self._sites],
                     "background": [site.get_signal("background") for site in self._sites],

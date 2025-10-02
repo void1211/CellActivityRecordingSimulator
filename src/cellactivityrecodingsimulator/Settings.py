@@ -7,7 +7,6 @@ from .carsIO import load_cells_from_json, load_sites_from_json
 class Settings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
-        self.data = data
         self.rootSettings = RootSettings(safe_get(data, "baseSettings"))
         self.spikeSetting = SpikeSettings(safe_get(data, "spikeSettings"))
         self.noiseSettings = NoiseSettings(safe_get(data, "noiseSettings"))
