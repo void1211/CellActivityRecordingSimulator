@@ -5,19 +5,16 @@ import chardet
 import logging
 import os
 
-from pydantic import BaseModel
-
 from .Site import Site
 from .Cell import Cell
-from .Settings import Settings
 from probeinterface import Probe
-from .Settings import convert_legacySettings
 
 # Windowsの場合はWindowsPathを使用
 if os.name == 'nt':
     Path = WindowsPath
 
-def load_settings_file(path: str) -> Settings:
+def load_settings_file(path: str):
+    from .Settings import Settings
     # ファイルの存在確認
     if not Path(path).exists():
         raise FileNotFoundError(f"設定ファイルが見つかりません: {path}")
@@ -38,6 +35,7 @@ def load_settings_file(path: str) -> Settings:
             content = json.load(f)
             # logging.info(f"ファイル内容: {repr(content)}")
             if "baseSettings" not in content:
+                from .Settings import convert_legacySettings
                 content = convert_legacySettings(content)
             settings = Settings(content)
             logging.info(f"設定ファイル: {settings}")
@@ -61,23 +59,21 @@ def load_settings_file(path: str) -> Settings:
         logging.error(f"その他のエラー: {e}")
         raise
     
-def load_cells_from_json(path: Path) -> list[Cell]:
-
-    if not Path(path).exists():
-        raise FileNotFoundError(f"セルファイルが見つかりません: {path}")
-    
-    if Path(path).stat().st_size == 0:
-        raise ValueError(f"セルファイルが空です: {path}")
+def load_cells_from_json(object: Path|dict) -> list[Cell]:
+    if isinstance(object, Path):
+        if not Path(object).exists():
+            raise FileNotFoundError(f"セルファイルが見つかりません: {object}")
+        
+        if Path(object).stat().st_size == 0:
+            raise ValueError(f"セルファイルが空です: {object}")
     
     cells = []
-    # ファイルのエンコーディングを自動検出
-    with open(path, "rb") as f:
-        raw_data = f.read()
-        detected = chardet.detect(raw_data)
-        encoding = detected['encoding']
-    
-    with open(path, "r", encoding=encoding) as f:
-        jcells = json.load(f)
+
+    if isinstance(object, dict):
+        jcells = object
+    else:
+        with open(object, "r") as f:
+            jcells = json.load(f)
     
     for i in range(len(jcells["id"])):
         cell_data = {
@@ -86,28 +82,25 @@ def load_cells_from_json(path: Path) -> list[Cell]:
             "y": jcells["y"][i], 
             "z": jcells["z"][i]
         }
-        
         cells.append(Cell().from_dict(cell_data))
     
     return cells
     
-def load_sites_from_json(path: Path) -> list[Site]:
-
-    if not Path(path).exists():
-        raise FileNotFoundError(f"サイトファイルが見つかりません: {path}")
-    
-    if Path(path).stat().st_size == 0:
-        raise ValueError(f"サイトファイルが空です: {path}")
+def load_sites_from_json(object: Path|dict) -> list[Site]:
+    if isinstance(object, Path):
+        if not Path(object).exists():
+            raise FileNotFoundError(f"サイトファイルが見つかりません: {object}")
+        
+        if Path(object).stat().st_size == 0:
+            raise ValueError(f"サイトファイルが空です: {object}")
     
     sites = []
-    # ファイルのエンコーディングを自動検出
-    with open(path, "rb") as f:
-        raw_data = f.read()
-        detected = chardet.detect(raw_data)
-        encoding = detected['encoding']
-    
-    with open(path, "r", encoding=encoding) as f:
-        jsites = json.load(f)
+    if isinstance(object, dict):
+        jsites = object
+    else:
+        with open(object, "r") as f:
+            jsites = json.load(f)
+
     for i in range(len(jsites["id"])):
         site_data = {
             "id": jsites["id"][i], 

@@ -9,6 +9,7 @@ from probeinterface import Probe
 
 from .CarsObject import CarsObject
 from .Settings import Settings
+from .Settings import default_settings, default_cells, default_sites
 from .carsIO import load_settings_file, load_cells_from_json, load_sites_from_Probe, load_sites_from_json, save_data, load_noise_file, load_spike_templates
 from .Noise import RandomNoise, DriftNoise, PowerLineNoise
 from .Template import make_similar_templates, GaborTemplate, ExponentialTemplate
@@ -63,20 +64,29 @@ def load_files(object: Path|Probe, type: str):
     else:
         raise ValueError(f"Invalid file type")
 
-def run(dir: Path, settings:Path, cells:Path, probe:Path|Probe, plot: bool=False):
+def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, plot: bool=False):
     """単一の実験を実行する"""
     try:
         logging.info(f"=== 実験開始 ===")
         
-        settings = load_files(settings, "settings")
+        if settings is not None:
+            settings = load_files(settings, "settings")
+        else:
+            settings = Settings(default_settings())
         logging.info(f"設定ファイル読み込み完了")
         
         # セルデータの読み込み
-        cells = load_files(cells, "cells")
+        if cells is not None:
+            cells = load_files(cells, "cells")
+        else:
+            cells = default_cells()
         logging.info(f"セルデータ読み込み完了: {len(cells)} cells")
         
         # サイトデータの読み込み
-        sites = load_files(probe, "probe")
+        if probe is not None:
+            sites = load_files(probe, "probe")
+        else:
+            sites = default_sites()
         logging.info(f"サイトデータ読み込み完了: {len(sites)} sites")
 
         saveDir = init_run(settings, Path(dir)) 
@@ -282,12 +292,7 @@ def init_logging(debug: bool):
     else:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-def init_example_dir(project_root: Path, args: argparse.Namespace):
-
-    if args.test:
-        example_dir = Path(project_root / TEST_DIR / "example") 
-    else:
-        example_dir = Path(args.example_dir)
+def init_example_dir(example_dir: Path):
     try:
         example_dir.exists()
     except Exception as e:
@@ -314,23 +319,43 @@ def main(project_root: Path, args: argparse.Namespace):
     try:
         init_logging(args.debug)
         # ベースディレクトリからの相対パスとして扱う
-        example_dir = init_example_dir(project_root, args)
-        logging.info(f"実験ディレクトリ: {example_dir}")
-        # 条件ファイルの検索
-        condition_names = find_conditions(example_dir, args.conditions)
+        if args.test:
+            example_dir = project_root / TEST_DIR / "example"
+            init_example_dir(example_dir)
+            logging.info(f"実験ディレクトリ: {example_dir}")
+            # 条件ファイルの検索
+            condition_names = find_conditions(example_dir, args.conditions)
+            # 各条件を順次実行
+            success_count = 0
+            for i, condition_name in enumerate(condition_names, 1):
+                logging.info(f"\n[{i}/{len(condition_names)}] {condition_name} を実行中...")
+                exam = example_dir/condition_name
+                if run(exam, plot=args.plot):
+                    success_count += 1
+                else:
+                    logging.error(f"実験が失敗しました: {condition_name}")
+            
+            logging.info(f"\n=== 実行完了 ===")
+            logging.info(f"成功: {success_count}/{len(condition_names)}")
+        else:
+            example_dir = Path(args.example_dir)
+            init_example_dir(example_dir)
+            logging.info(f"実験ディレクトリ: {example_dir}")
+            # 条件ファイルの検索
+            condition_names = find_conditions(example_dir, args.conditions)
         
-        # 各条件を順次実行
-        success_count = 0
-        for i, condition_name in enumerate(condition_names, 1):
-            logging.info(f"\n[{i}/{len(condition_names)}] {condition_name} を実行中...")
-            exam = example_dir/condition_name
-            if run(exam, settings=exam/SETTINGS_FILE, cells=exam/CELLS_FILE, probe=exam/PROBE_FILE, plot=args.plot, test=args.test, debug=args.debug):
-                success_count += 1
-            else:
-                logging.error(f"実験が失敗しました: {condition_name}")
-        
-        logging.info(f"\n=== 実行完了 ===")
-        logging.info(f"成功: {success_count}/{len(condition_names)}")
+            # 各条件を順次実行
+            success_count = 0
+            for i, condition_name in enumerate(condition_names, 1):
+                logging.info(f"\n[{i}/{len(condition_names)}] {condition_name} を実行中...")
+                exam = example_dir/condition_name
+                if run(exam, settings=exam/SETTINGS_FILE, cells=exam/CELLS_FILE, probe=exam/PROBE_FILE, plot=args.plot):
+                    success_count += 1
+                else:
+                    logging.error(f"実験が失敗しました: {condition_name}")
+            
+            logging.info(f"\n=== 実行完了 ===")
+            logging.info(f"成功: {success_count}/{len(condition_names)}")
         
     except Exception as e:
         logging.error(f"メイン処理でエラー発生: {e}", exc_info=True)

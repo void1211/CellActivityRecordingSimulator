@@ -3,8 +3,6 @@ import logging
 import numpy as np
 from scipy.signal import butter, filtfilt
 
-from .Settings import Settings
-
 def make_save_dir(pathSaveDir: Path) -> Path:
     """保存ディレクトリを作成する"""
     Path(pathSaveDir).mkdir(parents=True, exist_ok=True)
@@ -65,3 +63,18 @@ def filterSignal(signal: np.ndarray, fs: float, lowCutoffFreq: float, highCutoff
     except ValueError as e:
         logging.warning(f"フィルタリングでエラーが発生しました: {e}。元の信号を返します。")
         return signal
+
+def probe_from_json(path: Path):
+    """JSONファイルからProbeオブジェクトを作成する"""
+    from probeinterface import Probe
+    import json
+    
+    if not path.exists():
+        raise FileNotFoundError(f"ファイルが見つかりません: {path}")
+    if path.stat().st_size == 0:
+        raise ValueError(f"ファイルが空です: {path}")
+    with open(path, "r") as f:
+        probe_data = json.load(f)
+    probe = Probe()
+    probe.from_dict(probe_data)
+    return probe

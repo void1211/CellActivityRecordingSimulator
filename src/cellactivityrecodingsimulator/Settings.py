@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 import logging
 from .BaseSettings import BaseSettings
-
+from .carsIO import load_cells_from_json, load_sites_from_json
 class Settings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
@@ -412,6 +412,7 @@ def default_settings(key: str=None) -> dict:
             "absolute_refractory_ratio": 1.0,
             "amplitudeMax": 100,
             "amplitudeMin": 90,
+            "attenTime": 25,
             "spikeType": "exponential",
             "gabor":{
                 "randType": "list",
@@ -422,14 +423,14 @@ def default_settings(key: str=None) -> dict:
             },
             "exponential":{
                 "randType": "list",
-                "ms_before": [0.4, 0.5, 0.6],
-                "ms_after": [300, 400, 500],
-                "negative_amplitude": [0, 45, 90, 135, 180, 225, 270, 315],
-                "positive_amplitude": [0, 45, 90, 135, 180, 225, 270, 315],
-                "depolarization_ms": [0, 45, 90, 135, 180, 225, 270, 315],
-                "repolarization_ms": [0, 45, 90, 135, 180, 225, 270, 315],
-                "recovery_ms": [0, 45, 90, 135, 180, 225, 270, 315],
-                "smooth_ms": [0, 45, 90, 135, 180, 225, 270, 315],
+                "ms_before": [4.0],
+                "ms_after": [4.0],
+                "negative_amplitude": [-1.0,-0.9],
+                "positive_amplitude": [0.1, 0.3],
+                "depolarization_ms": [0.1,0.3],
+                "repolarization_ms": [0.4,1.0],
+                "recovery_ms": [0.8,2.5],
+                "smooth_ms": [0.05],
             },
             "template":{
                 "pathSpikeList": "test_example_condition1.spike",
@@ -461,7 +462,7 @@ def default_settings(key: str=None) -> dict:
         "driftSettings":{
             "enable": True,
             "driftType": "random_walk",
-            "randomWalk":{
+            "random_walk":{
                 "amplitude": 50.0,
                 "frequency": 0.1,
             },
@@ -496,6 +497,26 @@ def default_settings(key: str=None) -> dict:
         return default_settings[key]
     else:   
         return default_settings
+
+def default_cells() -> dict:
+    default_cells = {
+        "id": [1, 2, 3, 4, 5, 6, 7, 8],
+        "x": [0, 0, 0, 0, 0, 0, 0, 0],
+        "y": [0, 50, 100, 150, 200, 250, 300, 350],
+        "z": [0, 0, 0, 0, 0, 0, 0, 0]
+    }
+    default_cells = load_cells_from_json(default_cells)
+    return default_cells
+
+def default_sites() -> dict:
+    default_sites = {
+        "id": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        "x": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "y": [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375],
+        "z": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    }
+    default_sites = load_sites_from_json(default_sites)
+    return default_sites
 
 def safe_get(data: dict, key: str, default: any=None) -> any:
     if key in data:
