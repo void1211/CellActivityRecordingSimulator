@@ -1,12 +1,12 @@
 import numpy as np
 
 
-def calcSpikeAmp(ampMax: float, ampMin: float) -> float:
+def calculate_spike_max_amplitude(ampMax: float, ampMin: float) -> float:
     """スパイク振幅を計算する"""
     amp = np.random.uniform(ampMin, ampMax)
     return amp
 
-def calcScaledSpikeAmp(spikeAmpList: list[float], distance: float, attenTime: float) -> list[float]:
+def calculate_scaled_spike_amplitude(spikeAmpList: list[float], distance: float, attenTime: float) -> list[float]:
     """スパイク振幅をスケーリングする"""
 
     attenuation_factor = (distance / attenTime + 1)**2
@@ -14,7 +14,7 @@ def calcScaledSpikeAmp(spikeAmpList: list[float], distance: float, attenTime: fl
     
     return scaledSpikeAmpList
 
-def calcDistance(target1, target2) -> float:
+def calculate_distance_two_objects(target1, target2) -> float:
     """2つのオブジェクトの距離を計算する"""
     if hasattr(target1, "x") and hasattr(target1, "y") and hasattr(target1, "z"):
         if hasattr(target2, "x") and hasattr(target2, "y") and hasattr(target2, "z"):
@@ -25,7 +25,7 @@ def calcDistance(target1, target2) -> float:
         raise ValueError("target1 has no x, y, or z attributes")
 
 
-def calculateCosineSimilarity(template1: list[float], template2: list[float]) -> float:
+def calculate_cosine_similarity(template1: list[float], template2: list[float]) -> float:
     """
     2つのスパイクテンプレート間のコサイン類似度を計算する
     
@@ -50,16 +50,3 @@ def calculateCosineSimilarity(template1: list[float], template2: list[float]) ->
     # 値を-1.0-1.0の範囲に制限
     return max(-1.0, min(1.0, similarity))
 
-def gabor(sigma: float, f0: float, theta: float, fs: float, spikeWidth: float) -> np.ndarray:
-    """ガボール関数を生成する"""
-    # spikeWidthはmsec単位、fsはHz単位
-    # 時間軸を正しく設定（秒単位）
-    x = np.linspace(-spikeWidth / 2, spikeWidth / 2, int(spikeWidth * fs / 1000))
-    x = x / 1000  # msecを秒に変換
-    
-    # sigmaもmsec単位なので秒に変換
-    sigma_sec = sigma / 1000
-    
-    y = np.exp(-x**2 / (2 * sigma_sec**2)) * np.cos(2 * np.pi * f0 * x + theta)
-    y = y / np.max(np.abs(y))
-    return y

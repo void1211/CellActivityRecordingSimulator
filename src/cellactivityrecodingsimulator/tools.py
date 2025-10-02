@@ -3,23 +3,23 @@ import logging
 import numpy as np
 from scipy.signal import butter, filtfilt
 
-def makeSaveDir(pathSaveDir: Path) -> Path:
+def make_save_dir(pathSaveDir: Path) -> Path:
     """保存ディレクトリを作成する"""
-    pathSaveDir.mkdir(parents=True, exist_ok=True)
-    if pathSaveDir.exists() and any(pathSaveDir.iterdir()):
-        user_input = input(f"保存先ディレクトリ {pathSaveDir} はすでに存在し、ファイルが含まれています。上書きしますか? (y/n): ")
-        if user_input.lower() != 'y':
-            # 別名で保存ディレクトリを作成
-            counter = 1
-            while True:
-                new_path = pathSaveDir.parent / f"{pathSaveDir.name}_{counter}"
-                if not new_path.exists():
-                    pathSaveDir = new_path
-                    pathSaveDir.mkdir(parents=True)
-                    logging.info(f"別名で保存ディレクトリを作成: {pathSaveDir}")
-                    break
-                counter += 1
-    return pathSaveDir    
+    Path(pathSaveDir).mkdir(parents=True, exist_ok=True)
+    # if pathSaveDir.exists() and any(pathSaveDir.iterdir()):
+        # user_input = input(f"保存先ディレクトリ {pathSaveDir} はすでに存在し、ファイルが含まれています。上書きしますか? (y/n): ")
+        # if user_input.lower() != 'y':
+        #     # 別名で保存ディレクトリを作成
+        #     counter = 1
+        #     while True:
+        #         new_path = pathSaveDir.parent / f"{pathSaveDir.name}_{counter}"
+        #         if not new_path.exists():
+        #             pathSaveDir = new_path
+        #             pathSaveDir.mkdir(parents=True)
+        #             logging.info(f"別名で保存ディレクトリを作成: {pathSaveDir}")
+        #             break
+        #         counter += 1
+    return Path(pathSaveDir)    
 
 def addSpikeToSignal(signal: np.ndarray, spikeTimes: list[int], spikeTemp: list[float], SpikeAmpList: list[float]) -> np.ndarray:
     """スパイクを信号に追加する"""

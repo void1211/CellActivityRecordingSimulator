@@ -1,0 +1,95 @@
+{
+    "baseSettings":{
+        "name": "test_example_condition1",
+        "pathSaveDir": null,
+
+        "fs": 30000,
+        "duration": 10,
+        "random_seed": 0
+    },
+    "spikeSettings":{
+        "rate": 10,
+        "isRefractory": true,
+        "refractoryPeriod": 3,
+        "absolute_refractory_ratio": 1.0,
+        "amplitudeMax": 100,
+        "amplitudeMin": 90,
+        "attenTime": 25,
+        "spikeType": "gabor",
+        "gabor":{
+            "randType": "list",
+            "sigma": [0.4, 0.5, 0.6],
+            "f0": [300, 400, 500],
+            "theta": [0, 45, 90, 135, 180, 225, 270, 315],
+            "width": 4
+        },
+        "exponential":{
+            "randType": "list",
+            "ms_before": [0.4, 0.5, 0.6],
+            "ms_after": [300, 400, 500],
+            "negative_amplitude": [0, 45, 90, 135, 180, 225, 270, 315],
+            "positive_amplitude": [0, 45, 90, 135, 180, 225, 270, 315],
+            "depolarization_ms": [0, 45, 90, 135, 180, 225, 270, 315],
+            "repolarization_ms": [0, 45, 90, 135, 180, 225, 270, 315],
+            "recovery_ms": [0, 45, 90, 135, 180, 225, 270, 315],
+            "smooth_ms": [0, 45, 90, 135, 180, 225, 270, 315]
+        },
+        "template":{
+            "pathSpikeList": "test_example_condition1.spike"
+        },
+        "truth":{
+            "pathSpikeList": "test_example_condition1.spike"
+        }
+    },
+    "noiseSettings":{
+        "noiseType": "model",
+        "model":{
+            "density": 30000,
+            "margin": 100,
+            "inviolableArea": 50
+        },
+        "normal":{
+            "amplitude": 10
+        },
+        "gaussian":{
+            "amplitude": 10,
+            "location": 0,
+            "scale": 1
+        },
+        "truth":{
+            "pathNoise": "test_example_condition1.noise",
+            "pathSites": "test_example_condition1.sites"
+        }
+    },
+    "driftSettings":{
+        "enable": true,
+        "driftType": "random_walk",
+        "random_walk":{
+            "amplitude": 50.0,
+            "frequency": 0.1
+        },
+        "step":{
+            "amplitude": 50.0,
+            "frequency": 0.1
+        },
+        "oscillatory":{
+            "amplitude": 50.0,
+            "frequency": 0.1
+        },
+        "exponential":{
+            "amplitude": 50.0,
+            "frequency": 0.1
+        }
+    },
+    "powerNoiseSettings":{
+        "enable": false,
+        "frequency": 50.0,
+        "amplitude": 20.0
+    },
+    "templateSimilarityControlSettings":{
+        "enable": false,
+        "min_cosine_similarity": 0.7,
+        "max_cosine_similarity": 0.95,
+        "similarity_control_attempts": 100
+    }
+}

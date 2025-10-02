@@ -62,9 +62,9 @@ python main.py
 ## プロジェクト構造
 
 ```
-CellActivityRecodingSimulater/
+cellactivityrecodingsimulator/
 ├── src/
-│   └── cellactivityrecodingsimulater/     # メインプロジェクト
+│   └── cellactivityrecodingsimulator/     # メインプロジェクト
 │       ├── main.py                        # メインプログラム
 │       ├── Cell.py                        # 細胞クラス
 │       ├── Site.py                        # 記録サイトクラス
