@@ -53,11 +53,11 @@ def parse_args():
 
 # # プロジェクトルートをパスに追加
 # project_root = Path(__file__).parent
-# # sys.path.insert(0, str(project_root / "src" / "cellactivityrecodingsimulater"))
+# # sys.path.insert(0, str(project_root / "src" / "cellactivityrecodingsimulator"))
 # # sys.path.insert(1, str(Path("C:/Users/tanaka-users/tlab/tlab_yasui/2025/simulations")))
 
 # メインプログラムをインポートして実行
-from cellactivityrecodingsimulater.main import main
+from cellactivityrecodingsimulator.main import main
 
 if __name__ == "__main__":
     args = parse_args()

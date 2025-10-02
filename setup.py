@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="cellactivityrecodingsimulater",
+    name="cellactivityrecodingsimulator",
     version="0.1.0",
-    packages=find_packages(include=['cellactivityrecodingsimulater*']),
+    packages=find_packages(include=['cellactivityrecodingsimulator*']),
     install_requires=[
         'typing-extensions>=4.10.0',
         'pydantic>=2.11.7',
