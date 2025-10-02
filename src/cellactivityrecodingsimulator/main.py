@@ -5,9 +5,10 @@ import logging
 import argparse
 from pathlib import Path
 import sys
+from probeinterface import Probe
 
 from .Settings import Settings
-from .carsIO import load_settings_file, load_cells_from_json, load_sites_from_json, save_data, load_noise_file, load_spike_templates
+from .carsIO import load_settings_file, load_cells_from_json, load_sites_from_Probe, load_sites_from_json, save_data, load_noise_file, load_spike_templates
 from .Noise import RandomNoise, DriftNoise, PowerLineNoise
 from .Template import make_similar_templates, GaborTemplate, ExponentialTemplate
 from .generate import make_noise_cells, make_background_activity, make_spike_times
@@ -23,13 +24,13 @@ PROBE_FILE = Path("probe.json")
 
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-def init_run(settings: Settings, example_dir: Path, condition_name: str):
+def init_run(settings: Settings, dir: Path):
     baseSettings = settings.rootSettings.to_dict()
     validate_settings(settings)
     set_seed(baseSettings)
     # 保存ディレクトリの作成
     if baseSettings["pathSaveDir"] is None:
-        pathSaveDir = example_dir / condition_name
+        pathSaveDir = dir
     else:
         pathSaveDir = baseSettings["pathSaveDir"]
         
@@ -49,37 +50,36 @@ def validate_settings(settings: Settings):
         logging.error(f"無効な設定を確認. 処理を停止: {errors}")
         sys.exit(1)
 
-def load_files(file_path: Path, type: str):
+def load_files(object: Path|Probe, type: str):
     if type == "settings":
-        return load_settings_file(file_path)
+        return load_settings_file(object)
     elif type == "cells":
-        return load_cells_from_json(file_path)
-    elif type == "probe":
-        return load_sites_from_json(file_path)
+        return load_cells_from_json(object)
+    elif type == "probe" and isinstance(object, Path):
+        return load_sites_from_json(object)
+    elif type == "probe" and isinstance(object, Probe):
+        return load_sites_from_Probe(object)
     else:
         raise ValueError(f"Invalid file type")
 
-def run(example_dir: Path, condition_name: str, args: argparse.Namespace):
+# def run(example_dir: Path, condition_name: str, plot: bool=False, test: bool=False, debug: bool=False):
+def run(dir: Path, settings:Path, cells:Path, probe:Path|Probe, plot: bool=False, test: bool=False, debug: bool=False):
     """単一の実験を実行する"""
     try:
-        logging.info(f"=== 実験開始: {condition_name} ===")
-        # 新しいディレクトリ構成に合わせてファイルパスを設定
-        settings_file = example_dir / condition_name / SETTINGS_FILE
-        cells_file = example_dir / condition_name / CELLS_FILE
-        probe_file = example_dir / condition_name / PROBE_FILE
+        logging.info(f"=== 実験開始 ===")
         
-        settings = load_files(settings_file, "settings")
+        settings = load_files(settings, "settings")
         logging.info(f"設定ファイル読み込み完了")
         
         # セルデータの読み込み
-        cells = load_files(cells_file, "cells")
+        cells = load_files(cells, "cells")
         logging.info(f"セルデータ読み込み完了: {len(cells)} cells")
         
         # サイトデータの読み込み
-        sites = load_files(probe_file, "probe")
+        sites = load_files(probe, "probe")
         logging.info(f"サイトデータ読み込み完了: {len(sites)} sites")
 
-        saveDir = init_run(settings, example_dir, condition_name) 
+        saveDir = init_run(settings, Path(dir)) 
 
         baseSettings = settings.rootSettings.to_dict()
         spikeSettings = settings.spikeSetting.to_dict()
@@ -210,7 +210,7 @@ def run(example_dir: Path, condition_name: str, args: argparse.Namespace):
 
         elif spikeSettings["spikeType"] == "template":
             templateSettings = spikeSettings["template"]
-            template_file = example_dir / templateSettings["pathSpikeList"]
+            template_file = Path(dir) / templateSettings["pathSpikeList"]
             if not template_file.exists():
                 logging.error(f"テンプレートファイルが見つかりません: {template_file}")
                 return False
@@ -285,14 +285,14 @@ def run(example_dir: Path, condition_name: str, args: argparse.Namespace):
         logging.info(f"データ保存完了: {saveDir}")
 
         # プロット表示（オプション）
-        if not args.no_plot:
-            plot_main(cells, noise_cells, sites, condition_name)
+        if plot:
+            plot_main(cells, noise_cells, sites, dir)
 
-        logging.info(f"=== 実験完了: {condition_name} ===")
+        logging.info(f"=== 実験完了 ===")
         return True
         
     except Exception as e:
-        logging.error(f"実験でエラー発生: {condition_name} - {e}", exc_info=True)
+        logging.error(f"実験でエラー発生 - {e}", exc_info=True)
         return False
 
 def init_logging(debug: bool):
@@ -342,8 +342,8 @@ def main(project_root: Path, args: argparse.Namespace):
         success_count = 0
         for i, condition_name in enumerate(condition_names, 1):
             logging.info(f"\n[{i}/{len(condition_names)}] {condition_name} を実行中...")
-            
-            if run(example_dir, condition_name, args):
+            exam = example_dir/condition_name
+            if run(exam, settings=exam/SETTINGS_FILE, cells=exam/CELLS_FILE, probe=exam/PROBE_FILE, plot=args.plot, test=args.test, debug=args.debug):
                 success_count += 1
             else:
                 logging.error(f"実験が失敗しました: {condition_name}")

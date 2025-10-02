@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from .Site import Site
 from .Cell import Cell
 from .Settings import Settings
+from probeinterface import Probe
 
 # Windowsの場合はWindowsPathを使用
 if os.name == 'nt':
@@ -114,8 +115,10 @@ def load_sites_from_json(path: Path) -> list[Site]:
         sites.append(Site().from_dict(site_data))
     return sites
 
-def load_sites_from_probeObject(probeObject) -> list[Site]:
+def load_sites_from_Probe(probeObject) -> list[Site]:
     sites = []
+    if not isinstance(probeObject, Probe):
+        raise ValueError(f"Invalid probe type")
     probe_dict = probeObject.to_dict()
     site_positions = np.array(probe_dict["contact_positions"])
     is_3d = True
