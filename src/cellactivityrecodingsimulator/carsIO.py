@@ -281,18 +281,18 @@ def convert_sites_for_kilosort(sites: list[Site]) -> dict:
     sitesをKilosort用のprobe形式に変換する
     """
     # チャンネルマップを作成
-    chanMap = [site.id for site in sites]
+    chanMap = [int(site.id) for site in sites]
     if min(chanMap) != 0:
         chanMap = [chanMap[i] - min(chanMap) for i in range(len(chanMap))]
     # 座標を抽出
-    xc = [site.x for site in sites]
-    yc = [site.y for site in sites]
+    xc = [float(site.x) for site in sites]
+    yc = [float(site.y) for site in sites]
     
     # kcoords（プローブグループ）を設定（デフォルトは全て1）
     kcoords = [0] * len(sites)
     
     # チャンネル数を設定
-    n_chan = len(sites)
+    n_chan = int(len(sites))
     
     probe = {
         'chanMap': chanMap,
