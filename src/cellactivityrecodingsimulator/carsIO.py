@@ -11,7 +11,7 @@ from .Site import Site
 from .Cell import Cell
 from .Settings import Settings
 from probeinterface import Probe
-from .tools import convert_legacySettings
+from .Settings import convert_legacySettings
 
 # Windowsの場合はWindowsPathを使用
 if os.name == 'nt':

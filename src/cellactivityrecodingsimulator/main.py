@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 from probeinterface import Probe
 
+from .CarsObject import CarsObject
 from .Settings import Settings
 from .carsIO import load_settings_file, load_cells_from_json, load_sites_from_Probe, load_sites_from_json, save_data, load_noise_file, load_spike_templates
 from .Noise import RandomNoise, DriftNoise, PowerLineNoise
@@ -62,8 +63,7 @@ def load_files(object: Path|Probe, type: str):
     else:
         raise ValueError(f"Invalid file type")
 
-# def run(example_dir: Path, condition_name: str, plot: bool=False, test: bool=False, debug: bool=False):
-def run(dir: Path, settings:Path, cells:Path, probe:Path|Probe, plot: bool=False, test: bool=False, debug: bool=False):
+def run(dir: Path, settings:Path, cells:Path, probe:Path|Probe, plot: bool=False):
     """単一の実験を実行する"""
     try:
         logging.info(f"=== 実験開始 ===")
@@ -87,27 +87,7 @@ def run(dir: Path, settings:Path, cells:Path, probe:Path|Probe, plot: bool=False
         driftSettings = settings.driftSettings.to_dict()
         powerNoiseSettings = settings.powerNoiseSettings.to_dict()
         templateSimilarityControlSettings = settings.templateSimilarityControlSettings.to_dict()
-        # template_parameters = {
-        #     "spikeType": settings.spikeType,
-        #     "randType": settings.randType,
-        #     "spikeAmpMax": settings.spikeAmpMax,
-        #     "spikeAmpMin": settings.spikeAmpMin,
-        #     "gaborSigma": settings.gaborSigma,
-        #     "gaborf0": settings.gaborf0,
-        #     "gabortheta": settings.gabortheta,
-        #     "ms_before": settings.ms_before,
-        #     "ms_after": settings.ms_after,
-        #     "negative_amplitude": settings.negative_amplitude,
-        #     "positive_amplitude": settings.positive_amplitude,
-        #     "depolarization_ms": settings.depolarization_ms,
-        #     "repolarization_ms": settings.repolarization_ms,
-        #     "recovery_ms": settings.recovery_ms,
-        #     "smooth_ms": settings.smooth_ms,
-        #     "spikeWidth": settings.spikeWidth,
-        #     "rate": settings.avgSpikeRate,
-        #     "isRefractory": settings.isRefractory,
-        #     "refractoryPeriod": settings.refractoryPeriod
-        # }
+
         # ノイズの適用
         if noiseSettings["noiseType"] == "truth":
             truthNoiseSettings = noiseSettings["truth"]
@@ -281,7 +261,7 @@ def run(dir: Path, settings:Path, cells:Path, probe:Path|Probe, plot: bool=False
             saveDir, 
             cells, 
             sites, 
-            noise_cells=(noise_cells if noiseSettings["noiseType"] == "model" else None), 
+            noise_cells=noise_cells if noiseSettings["noiseType"] == "model" else None, 
             fs=baseSettings["fs"])
         logging.info(f"データ保存完了: {saveDir}")
 
@@ -290,7 +270,7 @@ def run(dir: Path, settings:Path, cells:Path, probe:Path|Probe, plot: bool=False
             plot_main(cells, noise_cells, sites, dir)
 
         logging.info(f"=== 実験完了 ===")
-        return True
+        return CarsObject(settings, cells, sites, noise_cells if noiseSettings["noiseType"] == "model" else None)
         
     except Exception as e:
         logging.error(f"実験でエラー発生 - {e}", exc_info=True)
