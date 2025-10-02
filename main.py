@@ -23,7 +23,7 @@ def parse_args():
         help='Condition folder pattern (default: condition*)'
     )
     parser.add_argument(
-        '--no-plot', '-np',
+        '--plot', '-p',
         action='store_true',
         default=False,
         help='Disable plot display'
