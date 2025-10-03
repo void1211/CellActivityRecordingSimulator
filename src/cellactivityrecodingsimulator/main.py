@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 from probeinterface import Probe
 
+from .GroundTruthUnitObject import GTUnitObject
 from .CarsObject import CarsObject
 from .Settings import Settings
 from .Settings import default_settings, default_cells, default_sites
@@ -64,11 +65,14 @@ def load_files(object: Path|Probe, type: str):
     else:
         raise ValueError(f"Invalid file type")
 
-def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, plot: bool=False):
+def run(dir: Path, settings:Path=None, cells:Path|GTUnitObject=None, probe:Path|Probe=None, plot: bool=False, verbose: bool=False):
     """単一の実験を実行する"""
     try:
         logging.info(f"=== 実験開始 ===")
-        
+        if verbose:
+            logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+        else:
+            logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
         if settings is not None:
             settings = load_files(settings, "settings")
         else:
@@ -77,7 +81,12 @@ def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, p
         
         # セルデータの読み込み
         if cells is not None:
-            cells = load_files(cells, "cells")
+            if isinstance(cells, Path):
+                cells = load_files(cells, "cells")
+            elif isinstance(cells, GTUnitObject):
+                cells = cells.cells
+            else:
+                raise ValueError(f"Invalid cells type")
         else:
             cells = default_cells()
         logging.info(f"セルデータ読み込み完了: {len(cells)} cells")
@@ -99,9 +108,10 @@ def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, p
         templateSimilarityControlSettings = settings.templateSimilarityControlSettings.to_dict()
 
         # ノイズの適用
+        logging.info(f"=== ノイズ生成と記録点への適用 ===")
         if noiseSettings["noiseType"] == "truth":
             truthNoiseSettings = noiseSettings["truth"]
-            for site in tqdm(sites, total=len(sites)):
+            for site in tqdm(sites, desc="ノイズ割振中", total=len(sites)):
                 site.set_signal(
                     "background", 
                     load_noise_file(
@@ -109,7 +119,7 @@ def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, p
                         ))
         elif noiseSettings["noiseType"] == "normal":  
             normalNoiseSettings = noiseSettings["normal"]
-            for site in tqdm(sites, total=len(sites)):
+            for site in tqdm(sites, desc="ノイズ割振中", total=len(sites)):
                 site.set_signal("background", 
                 RandomNoise(
                     baseSettings["fs"], 
@@ -118,7 +128,7 @@ def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, p
                     ).generate("normal"))
         elif noiseSettings["noiseType"] == "gaussian":
             gaussianNoiseSettings = noiseSettings["gaussian"]
-            for site in tqdm(sites, total=len(sites)):
+            for site in tqdm(sites, desc="ノイズ割振中", total=len(sites)):
                 site.set_signal("background", 
                 RandomNoise(
                     baseSettings["fs"], 
@@ -128,7 +138,6 @@ def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, p
                     gaussianNoiseSettings["scale"]
                     ).generate("gaussian"))
         elif noiseSettings["noiseType"] == "model":
-            modelNoiseSettings = noiseSettings["model"]
             # ノイズ細胞を生成してサイトに追加
             noise_cells = make_noise_cells(
                 baseSettings["duration"], 
@@ -137,7 +146,7 @@ def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, p
                 spikeSettings,
                 noiseSettings
                 )
-            for site in tqdm(sites, total=len(sites)):
+            for site in tqdm(sites, desc="ノイズ割振中", total=len(sites)):
                 site.set_signal("background", 
                 make_background_activity(
                     baseSettings["duration"], 
@@ -147,13 +156,14 @@ def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, p
                     spikeSettings["attenTime"]
                     ))
         elif noiseSettings["noiseType"] == "none":
-            for site in tqdm(sites, total=len(sites)):
+            for site in tqdm(sites, desc="ノイズ割振中", total=len(sites)):
                 site.set_signal("background", 
                 np.zeros(int(baseSettings["duration"] * baseSettings["fs"])))
         else:
             raise ValueError(f"Invalid noise type")
         
         # スパイクテンプレートの読み込み
+        logging.info(f"=== スパイク活動の生成 ===")
         if spikeSettings["spikeType"] in ["gabor", "exponential"]:
             if templateSimilarityControlSettings["enable"]:
                 group_ids = list(set([cell.group for cell in cells]))
@@ -221,7 +231,7 @@ def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, p
             raise ValueError(f"Invalid spike type")
 
         # 信号生成
-        logging.info("信号生成開始...")
+        logging.info(f"=== 信号生成 ===")
         if driftSettings["enable"]:
             drift = DriftNoise(
                 baseSettings["fs"], 
@@ -259,6 +269,7 @@ def run(dir: Path, settings:Path=None, cells:Path=None, probe:Path|Probe=None, p
             
 
         # データの保存
+        logging.info(f"=== データの保存 ===")
         logging.info(f"保存先ディレクトリ: {saveDir}")
         logging.info(f"saveDirの型: {type(saveDir)}")
         logging.info(f"saveDirの絶対パス: {saveDir.absolute() if hasattr(saveDir, 'absolute') else 'N/A'}")

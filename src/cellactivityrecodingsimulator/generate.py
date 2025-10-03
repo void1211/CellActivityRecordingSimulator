@@ -59,8 +59,8 @@ def make_noise_cells(
     attempts = 0
     max_attempts = 1000  # 無限ループ防止
     
-    logging.info(f"Generating {cell_count} noise cells...")
-    for i in tqdm(range(cell_count)):
+    logging.info(f"=== ノイズ細胞生成 ===")
+    for i in tqdm(range(cell_count), desc="ノイズ細胞生成中", total=cell_count):
         attempts = 0
         while attempts < max_attempts:
             attempts += 1
@@ -123,8 +123,8 @@ def make_background_activity(duration: float, fs: float, noise_cells: list[Cell]
     site_signal = np.zeros(int(duration * fs))
     
     added_spikes = 0
-    logging.info(f"Adding spikes to site {site.id}...")
-    for cell_idx, cell in tqdm(enumerate(noise_cells), total=len(noise_cells)):
+    logging.info(f"=== ノイズ細胞活動追加 ===")
+    for cell_idx, cell in tqdm(enumerate(noise_cells), desc="ノイズ細胞活動追加中", total=len(noise_cells), leave=False):
         # 各細胞からの信号を計算
         scaled_amps = calculate_scaled_spike_amplitude(cell.spikeAmpList, calculate_distance_two_objects(cell, site), attenTime)
         # スパイクを信号に追加

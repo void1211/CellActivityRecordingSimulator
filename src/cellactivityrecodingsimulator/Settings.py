@@ -442,8 +442,8 @@ def default_settings(key: str=None) -> dict:
             "noiseType": "model",
             "model":{
                 "density": 30000,
-                "margin": 100,
-                "inviolableArea": 50,
+                "margin": 200,
+                "inviolableArea": 0,
             },
             "normal":{
                 "amplitude": 10,
