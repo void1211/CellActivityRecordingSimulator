@@ -80,9 +80,9 @@ class CarsObject:
             }
         }
 
-    def get_NumpyRecording(self, t_start: float=0) -> NumpyRecording:
+    def get_NumpyRecording(self, t_starts: List[float]=[0]) -> NumpyRecording:
         """
-        t_start: float
+        t_starts: List[float]
         """
         traces = []
         channel_ids = []
@@ -93,7 +93,7 @@ class CarsObject:
         recording = NumpyRecording(
             traces,
             self._settings.to_dict()["baseSettings"]["fs"],
-            t_start=t_start,
+            t_starts=t_starts,
             channel_ids=channel_ids
             )
         return recording
