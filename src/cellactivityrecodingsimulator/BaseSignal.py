@@ -1,8 +1,8 @@
 import numpy as np
 
+
 class BaseSignal:
     def __init__(self, fs: float, duration: float):
-        
         self._fs = fs
         self._duration = duration
         self._data = np.zeros(int(duration * fs))
@@ -16,15 +16,15 @@ class BaseSignal:
     @property
     def fs(self):
         return self._fs
-    
+
     @property
     def duration(self):
         return self._duration
-    
+
     @property
     def data(self):
         return self._data
-    
+
     @fs.setter
     def fs(self, fs: float):
         self._check_fs(fs)
@@ -47,6 +47,5 @@ class BaseSignal:
         assert duration > 0, "duration must be greater than 0"
 
     def _check_data(self, data: np.ndarray):
-        assert data.shape[0] == self.duration * self.fs, "data must be equal to duration * fs"
-        
-        
+        v = data.shape[0] == self.duration * self.fs
+        assert v, "data must be equal to duration * fs"

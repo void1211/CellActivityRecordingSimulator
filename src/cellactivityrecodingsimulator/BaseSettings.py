@@ -1,9 +1,5 @@
-from pathlib import Path
-from typing import Optional
-import json
 
 class BaseSettings():
-    
     def __init__(self, data: dict):
         self.data = data
 
