@@ -8,3 +8,9 @@ wheels/
 
 # venv
 .venv
+
+default/
+test/example/condition1/*.npy
+test/example/condition1/*.bin
+test/example/condition2/*.npy
+test/example/condition2/*.bin
