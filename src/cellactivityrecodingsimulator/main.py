@@ -11,7 +11,7 @@ from .GroundTruthUnitObject import GTUnitObject
 from .CarsObject import CarsObject
 from .Settings import Settings
 from .Settings import default_settings, default_cells, default_sites
-from .carsIO import load_settings_file, load_cells_from_json, load_sites_from_Probe, load_sites_from_json, save_data, load_noise_file, load_spike_templates
+from .carsIO import load_settings_from_json, load_cells_from_json, load_sites_from_Probe, load_sites_from_json, save_data, load_noise_file, load_spike_templates
 from .Noise import RandomNoise, DriftNoise, PowerLineNoise
 from .Template import make_similar_templates, GaborTemplate, ExponentialTemplate
 from .generate import make_noise_cells, make_background_activity, make_spike_times
@@ -55,7 +55,7 @@ def validate_settings(settings: Settings):
 
 def load_files(object: Path|Probe, type: str):
     if type == "settings":
-        return load_settings_file(object)
+        return load_settings_from_json(object)
     elif type == "cells":
         return load_cells_from_json(object)
     elif type == "probe" and isinstance(object, Path):

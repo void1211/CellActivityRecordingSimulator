@@ -11,9 +11,9 @@ from spikeinterface.core import NumpyRecording
 class CarsObject:
     def __init__(
     self, 
-    settings: Settings, 
-    cells: List[Cell], 
-    sites: List[Site],
+    settings: Settings=None, 
+    cells: List[Cell]=None, 
+    sites: List[Site]=None,
     noise_cells: List[Cell]=None,
     ):
         self._settings = settings
@@ -79,6 +79,14 @@ class CarsObject:
                 "group": [noise_cell.group for noise_cell in self._noise_cells]
             }
         }
+
+    def from_dict(data: dict) -> "CarsObject":
+        return CarsObject(
+            settings=Settings.from_dict(data["settings"]),
+            cells=[Cell.from_dict(cell) for cell in data["cells"]],
+            sites=[Site.from_dict(site) for site in data["sites"]],
+            noise_cells=[Cell.from_dict(noise_cell) for noise_cell in data["noise_cells"]]
+        )
 
     def get_NumpyRecording(self, t_starts: List[float]=[0]) -> NumpyRecording:
         """
@@ -180,111 +188,109 @@ class CarsObject:
         # npzファイルとして保存
         np.savez_compressed(filepath, **save_dict)
         print(f"CarsObject saved to {filepath}")
-
-    @classmethod
-    def load_npz(cls, filepath: str):
-        """
-        npz形式からCarsObjectを読み込む
+def load_npz(cls, filepath: str):
+    """
+    npz形式からCarsObjectを読み込む
+    
+    Args:
+        filepath (str): 読み込み元のファイルパス
         
-        Args:
-            filepath (str): 読み込み元のファイルパス
+    Returns:
+        CarsObject: 読み込まれたCarsObject
+    """
+    # npzファイルを読み込み
+    data = np.load(filepath, allow_pickle=True)
+    
+    # 設定を復元
+    settings_dict = json.loads(data['settings'].item())
+    settings = Settings.from_dict(settings_dict)
+    
+    # セルデータを復元
+    cells = []
+    if 'cell_ids' in data:
+        cell_ids = data['cell_ids']
+        cell_positions = data['cell_positions']
+        cell_groups = data['cell_groups']
+        
+        # スパイクデータを復元
+        spike_times = data.get('spike_times', np.array([]))
+        spike_amplitudes = data.get('spike_amplitudes', np.array([]))
+        spike_templates = data.get('spike_templates', np.array([]))
+        
+        for i, (cell_id, pos, group) in enumerate(zip(cell_ids, cell_positions, cell_groups)):
+            # このセルに属するスパイクを抽出
+            cell_spike_mask = spike_templates == i
+            cell_spike_times = spike_times[cell_spike_mask]
+            cell_spike_amplitudes = spike_amplitudes[cell_spike_mask]
             
-        Returns:
-            CarsObject: 読み込まれたCarsObject
-        """
-        # npzファイルを読み込み
-        data = np.load(filepath, allow_pickle=True)
-        
-        # 設定を復元
-        settings_dict = json.loads(data['settings'].item())
-        settings = Settings.from_dict(settings_dict)
-        
-        # セルデータを復元
-        cells = []
-        if 'cell_ids' in data:
-            cell_ids = data['cell_ids']
-            cell_positions = data['cell_positions']
-            cell_groups = data['cell_groups']
+            # テンプレートは仮で作成（実際の実装に応じて調整）
+            template = np.zeros((10, 10))  # 仮のテンプレート
             
-            # スパイクデータを復元
-            spike_times = data.get('spike_times', np.array([]))
-            spike_amplitudes = data.get('spike_amplitudes', np.array([]))
-            spike_templates = data.get('spike_templates', np.array([]))
-            
-            for i, (cell_id, pos, group) in enumerate(zip(cell_ids, cell_positions, cell_groups)):
-                # このセルに属するスパイクを抽出
-                cell_spike_mask = spike_templates == i
-                cell_spike_times = spike_times[cell_spike_mask]
-                cell_spike_amplitudes = spike_amplitudes[cell_spike_mask]
-                
-                # テンプレートは仮で作成（実際の実装に応じて調整）
-                template = np.zeros((10, 10))  # 仮のテンプレート
-                
-                cell = Cell(
-                    id=cell_id,
-                    x=pos[0], y=pos[1], z=pos[2],
-                    spikeTimeList=cell_spike_times.tolist(),
-                    spikeAmpList=cell_spike_amplitudes.tolist(),
-                    spikeTemp=template,
-                    group=group
-                )
-                cells.append(cell)
+            cell = Cell(
+                id=cell_id,
+                x=pos[0], y=pos[1], z=pos[2],
+                spikeTimeList=cell_spike_times.tolist(),
+                spikeAmpList=cell_spike_amplitudes.tolist(),
+                spikeTemp=template,
+                group=group
+            )
+            cells.append(cell)
+    
+    # ノイズセルデータを復元
+    noise_cells = []
+    if 'noise_cell_ids' in data:
+        noise_cell_ids = data['noise_cell_ids']
+        noise_cell_positions = data['noise_cell_positions']
         
-        # ノイズセルデータを復元
-        noise_cells = []
-        if 'noise_cell_ids' in data:
-            noise_cell_ids = data['noise_cell_ids']
-            noise_cell_positions = data['noise_cell_positions']
-            
-            noise_spike_times = data.get('noise_cell_spike_times', np.array([]))
-            noise_spike_amplitudes = data.get('noise_cell_spike_amplitudes', np.array([]))
-            noise_spike_templates = data.get('noise_cell_spike_templates', np.array([]))
-            
-            for i, (cell_id, pos) in enumerate(zip(noise_cell_ids, noise_cell_positions)):
-                cell_spike_mask = noise_spike_templates == i
-                cell_spike_times = noise_spike_times[cell_spike_mask]
-                cell_spike_amplitudes = noise_spike_amplitudes[cell_spike_mask]
-                
-                template = np.zeros((10, 10))  # 仮のテンプレート
-                
-                noise_cell = Cell(
-                    id=cell_id,
-                    x=pos[0], y=pos[1], z=pos[2],
-                    spikeTimeList=cell_spike_times.tolist(),
-                    spikeAmpList=cell_spike_amplitudes.tolist(),
-                    spikeTemp=template,
-                    group=0  # ノイズセルはグループ0
-                )
-                noise_cells.append(noise_cell)
+        noise_spike_times = data.get('noise_cell_spike_times', np.array([]))
+        noise_spike_amplitudes = data.get('noise_cell_spike_amplitudes', np.array([]))
+        noise_spike_templates = data.get('noise_cell_spike_templates', np.array([]))
         
-        # サイトデータを復元
-        sites = []
-        if 'site_ids' in data:
-            site_ids = data['site_ids']
-            site_positions = data['site_positions']
+        for i, (cell_id, pos) in enumerate(zip(noise_cell_ids, noise_cell_positions)):
+            cell_spike_mask = noise_spike_templates == i
+            cell_spike_times = noise_spike_times[cell_spike_mask]
+            cell_spike_amplitudes = noise_spike_amplitudes[cell_spike_mask]
             
-            for i, (site_id, pos) in enumerate(zip(site_ids, site_positions)):
-                # 各信号タイプのデータを復元
-                signals = {}
-                for signal_type in ['raw', 'noise', 'filtered', 'power', 'drift', 'background', 'spike']:
-                    signal_key = f'signal{signal_type.capitalize()}'
-                    if signal_key in data:
-                        signals[signal_type] = data[signal_key][i]
-                
-                site = Site(
-                    id=site_id,
-                    x=pos[0], y=pos[1], z=pos[2],
-                    signals=signals
-                )
-                sites.append(site)
+            template = np.zeros((10, 10))  # 仮のテンプレート
+            
+            noise_cell = Cell(
+                id=cell_id,
+                x=pos[0], y=pos[1], z=pos[2],
+                spikeTimeList=cell_spike_times.tolist(),
+                spikeAmpList=cell_spike_amplitudes.tolist(),
+                spikeTemp=template,
+                group=0  # ノイズセルはグループ0
+            )
+            noise_cells.append(noise_cell)
+    
+    # サイトデータを復元
+    sites = []
+    if 'site_ids' in data:
+        site_ids = data['site_ids']
+        site_positions = data['site_positions']
         
-        # CarsObjectを作成
-        cars_obj = cls(
-            settings=settings,
-            cells=cells,
-            sites=sites,
-            noise_cells=noise_cells if noise_cells else None
-        )
-        
-        print(f"CarsObject loaded from {filepath}")
-        return cars_obj
+        for i, (site_id, pos) in enumerate(zip(site_ids, site_positions)):
+            # 各信号タイプのデータを復元
+            signals = {}
+            for signal_type in ['raw', 'noise', 'filtered', 'power', 'drift', 'background', 'spike']:
+                signal_key = f'signal{signal_type.capitalize()}'
+                if signal_key in data:
+                    signals[signal_type] = data[signal_key][i]
+            
+            site = Site(
+                id=site_id,
+                x=pos[0], y=pos[1], z=pos[2],
+                signals=signals
+            )
+            sites.append(site)
+    
+    # CarsObjectを作成
+    cars_obj = cls(
+        settings=settings,
+        cells=cells,
+        sites=sites,
+        noise_cells=noise_cells if noise_cells else None
+    )
+    
+    print(f"CarsObject loaded from {filepath}")
+    return cars_obj

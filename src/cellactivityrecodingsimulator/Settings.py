@@ -5,7 +5,7 @@ import logging
 from .BaseSettings import BaseSettings
 from .carsIO import load_cells_from_json, load_sites_from_json
 class Settings(BaseSettings):
-    def __init__(self, data: dict):
+    def __init__(self, data: dict=None):
         super().__init__(data)
         self.rootSettings = RootSettings(safe_get(data, "baseSettings"))
         self.spikeSetting = SpikeSettings(safe_get(data, "spikeSettings"))
@@ -45,13 +45,11 @@ class Settings(BaseSettings):
         else:
             return f"✗ 設定に{len(errors)}個のエラーがあります:\n" + "\n".join(f"  - {error}" for error in errors)
 
-    # def to_dict(self) -> dict:
-    #     return self.data
+    def from_dict(data: dict) -> "Settings":
+        return Settings(data)
 
-    def from_json(self, json_path: Path):
-        with open(json_path, 'r') as f:
-            data = json.load(f)
-        return self.to_dict(data)
+    def to_dict(self) -> dict:
+        return self.data
 
 class RootSettings(BaseSettings):
 
@@ -627,4 +625,7 @@ def convert_legacySettings(legacySettings: dict) -> dict:
     }
 
     return newSettings
+
+def from_dict(data: dict) -> Settings:
+    return Settings(data)
     

@@ -13,7 +13,7 @@ from probeinterface import Probe
 if os.name == 'nt':
     Path = WindowsPath
 
-def load_settings_file(path: str):
+def load_settings_from_json(path: str):
     from .Settings import Settings
     # ファイルの存在確認
     if not Path(path).exists():
@@ -37,7 +37,7 @@ def load_settings_file(path: str):
             if "baseSettings" not in content:
                 from .Settings import convert_legacySettings
                 content = convert_legacySettings(content)
-            settings = Settings(content)
+            settings = load_settings_from_dict(content)
             logging.info(f"設定ファイル: {settings}")
             return settings
     except json.JSONDecodeError as e:
@@ -47,6 +47,10 @@ def load_settings_file(path: str):
     except Exception as e:
         logging.error(f"その他のエラー: {e}")
         raise
+
+def load_settings_from_dict(data: dict) -> "Settings":
+    from .Settings import Settings
+    return Settings.from_dict(data)
 
 def load_cells_from_json(object: Path|dict) -> list[Cell]:
     if isinstance(object, Path):
@@ -73,6 +77,16 @@ def load_cells_from_json(object: Path|dict) -> list[Cell]:
         }
         cells.append(Cell().from_dict(cell_data)) 
     return cells
+
+def load_cells_from_GTUnitObject(data: dict) -> list[Cell]:
+    from .Cell import Cell
+    from .GTUnitObject import GTUnitObject
+    return [Cell().from_dict(cell_data) for cell_data in data.cells]
+
+def load_cells_from_dict(data: dict) -> list[Cell]:
+    from .Cell import Cell
+    return [Cell().from_dict(cell_data) for cell_data in data]
+
 
 def load_sites_from_json(object: Path|dict) -> list[Site]:
     if isinstance(object, Path):
