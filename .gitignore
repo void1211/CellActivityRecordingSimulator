@@ -10,6 +10,9 @@ wheels/
 .venv
 
 default/
+preprocessed_data_for_*/
+spykingcircus2_default/
+analyzer_spykingcircus2_default/
 test/example/condition1/*.npy
 test/example/condition1/*.bin
 test/example/condition2/*.npy
