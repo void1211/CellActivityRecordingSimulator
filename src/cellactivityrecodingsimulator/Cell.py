@@ -86,10 +86,22 @@ class Cell(BaseObject):
     def _check_group(self, value):
         if not isinstance(value, int):
             raise TypeError("groupは整数である必要があります")
-    
-    def from_dict(self, data: dict):
-        super().from_dict(data)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "group": self.group,
+            "position": [self.x, self.y, self.z],
+            "spikeTime": self.spikeTimeList,
+            "amplitude": self.spikeAmpList,
+            "template": self.spikeTemp,
+        }
+
+    def from_dict(self, data: dict) -> "Cell":
+        super().__init__(x=data.get("x", 0), y=data.get("y", 0), z=data.get("z", 0))
         self.id = data.get("id", 0)
         self.group = data.get("group", 0)
-        
+        self.spikeTimeList = data.get("spikeTime", np.array([]))
+        self.spikeAmpList = data.get("amplitude", np.array([]))
+        self.spikeTemp = data.get("template", np.array([]))
         return self

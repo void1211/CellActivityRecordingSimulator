@@ -13,7 +13,7 @@ from .generate import make_noise_cells, make_background_activity, make_spike_tim
 from .plot.main import plot_main
 from .tools import addSpikeToSignal, make_save_dir
 from .main import main, run
-from .carsIO import load_settings_file, load_cells_from_json, load_sites_from_json, save_data, load_noise_file, load_spike_templates
+from .carsIO import load_settings_from_json, load_cells_from_json, load_sites_from_json, save_data, load_noise_file, load_spike_templates
 
 __version__ = importlib.metadata.version("cellactivityrecodingsimulator")
 

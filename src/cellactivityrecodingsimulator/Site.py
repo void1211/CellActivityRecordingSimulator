@@ -15,6 +15,10 @@ class Site(BaseObject):
         self._signal_power = []
         self._signal_background = []
 
+        self._signal_raw = []
+        self._signal_noise = []
+        self._signal_filtered = []
+
     @property
     def id(self):
         return self._id
@@ -43,7 +47,7 @@ class Site(BaseObject):
         signal_type: spike, drift, power, background
         """
         assert isinstance(signal_type, str), "Signal type must be a string"
-        assert signal_type in ["spike", "drift", "power", "background"], "Invalid signal type"
+        assert signal_type in ["spike", "drift", "power", "background", "raw", "noise", "filtered"], "Invalid signal type"
 
         if isinstance(signal, list):
             signal = np.array(signal)
@@ -57,6 +61,12 @@ class Site(BaseObject):
             self._signal_power = signal
         elif signal_type == "background":
             self._signal_background = signal
+        elif signal_type == "raw":
+            self._signal_raw = signal
+        elif signal_type == "noise":
+            self._signal_noise = signal
+        elif signal_type == "filtered":
+            self._signal_filtered = signal
 
     def get_signal(self, signal_type: str, fs: float=None) -> np.ndarray:
         """
@@ -82,9 +92,23 @@ class Site(BaseObject):
 
     def _make_signal(self, signals: list[np.ndarray]):
         return sum(signals)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "position": [self.x, self.y, self.z],
+            "spike": self.get_signal("spike"),
+            "drift": self.get_signal("drift"),
+            "power": self.get_signal("power"),
+            "background": self.get_signal("background"),
+        }
 
-    def from_dict(self, data):
-        super().from_dict(data)
-
-        self._id = data.get("id", 0)
+    def from_dict(self, data: dict) -> "Site":
+        super().__init__(x=data.get("x", 0), y=data.get("y", 0), z=data.get("z", 0))
+        self.id = data.get("id", 0)
+        self.set_signal("spike", data.get("spike", np.array([])))
+        self.set_signal("drift", data.get("drift", np.array([])))
+        self.set_signal("power", data.get("power", np.array([])))
+        self.set_signal("background", data.get("background", np.array([])))
         return self
+        

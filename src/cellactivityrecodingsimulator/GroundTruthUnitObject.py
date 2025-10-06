@@ -1,5 +1,6 @@
 from .Cell import Cell
 import numpy as np
+from spikeinterface.core import NumpySorting
 
 
 
@@ -131,3 +132,19 @@ class GTUnitObject:
             raise ValueError(f"Invalid id_major_order: {self._id_major_order}")
 
         return cells
+
+    def save_npz(self, filepath: str):
+        data_dict = self.to_dict()
+        np.savez_compressed(filepath, **data_dict)
+
+    def to_Sorting(self, sampling_frequency: float):
+        units_dict = {}
+        for index, cell in enumerate(self._cells):
+            units_dict[index] = np.array(cell.spikeTimeList)
+
+        gt_sorting = NumpySorting.from_unit_dict(
+            units_dict_list=units_dict,
+            sampling_frequency=sampling_frequency,
+        )
+        return gt_sorting
+    

@@ -71,9 +71,3 @@ class BaseObject():
         self._x = x
         self._y = y
         self._z = z
-
-    def from_dict(self, data):
-        self._x = data["x"]
-        self._y = data["y"]
-        self._z = data["z"]
-        return self

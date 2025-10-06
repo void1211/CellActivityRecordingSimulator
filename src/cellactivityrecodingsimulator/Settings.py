@@ -45,8 +45,16 @@ class Settings(BaseSettings):
         else:
             return f"✗ 設定に{len(errors)}個のエラーがあります:\n" + "\n".join(f"  - {error}" for error in errors)
 
-    def from_dict(data: dict) -> "Settings":
-        return Settings(data)
+    def from_dict(self, data: dict) -> "Settings":
+        self.data = data
+        self.rootSettings = RootSettings(safe_get(data, "baseSettings"))
+        self.spikeSetting = SpikeSettings(safe_get(data, "spikeSettings"))
+        self.noiseSettings = NoiseSettings(safe_get(data, "noiseSettings"))
+        self.driftSettings = DriftSettings(safe_get(data, "driftSettings"))
+        self.powerNoiseSettings = PowerNoiseSettings(safe_get(data, "powerNoiseSettings"))
+        self.templateSimilarityControlSettings = TemplateSimilarityControlSettings(safe_get(data, "templateSimilarityControlSettings"))
+        return self
+        
 
     def to_dict(self) -> dict:
         return self.data
