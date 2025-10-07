@@ -97,11 +97,16 @@ class Cell(BaseObject):
             "template": self.spikeTemp,
         }
 
-    def from_dict(self, data: dict) -> "Cell":
-        super().__init__(x=data.get("x", 0), y=data.get("y", 0), z=data.get("z", 0))
-        self.id = data.get("id", 0)
-        self.group = data.get("group", 0)
-        self.spikeTimeList = data.get("spikeTime", np.array([]))
-        self.spikeAmpList = data.get("amplitude", np.array([]))
-        self.spikeTemp = data.get("template", np.array([]))
-        return self
+    @classmethod
+    def from_dict(cls, data: dict) -> "Cell":
+        cell = cls(
+            id=data.get("id", 0),
+            group=data.get("group", 0),
+            x=data.get("x", 0),
+            y=data.get("y", 0),
+            z=data.get("z", 0),
+        )
+        cell.spikeTimeList = data.get("spikeTime", np.array([]))
+        cell.spikeAmpList = data.get("amplitude", np.array([]))
+        cell.spikeTemp = data.get("template", np.array([]))
+        return cell

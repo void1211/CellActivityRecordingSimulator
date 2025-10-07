@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 from probeinterface import Probe
 
-from .GroundTruthUnitObject import GTUnitObject
+from .GroundTruthUnitsObject import GTUnitObject
 from .CarsObject import CarsObject
 from .Settings import Settings
 from .Settings import default_settings, default_cells, default_sites

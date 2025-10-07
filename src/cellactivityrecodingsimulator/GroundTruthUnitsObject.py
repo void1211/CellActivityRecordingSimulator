@@ -4,7 +4,7 @@ from spikeinterface.core import NumpySorting
 
 
 
-class GTUnitObject:
+class GTUnitsObject:
 
     def __init__(
         self, 
@@ -27,7 +27,7 @@ class GTUnitObject:
         self._cells = self.generate()
 
     def __str__(self):
-        return f"GTUnit - {len(self._cells)} cells - {self._num_column} columns"
+        return f"GTUnits - {len(self._cells)} cells - {self._num_column} columns"
 
     def __repr__(self):
         return self.__str__()

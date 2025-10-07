@@ -80,7 +80,7 @@ def load_cells_from_json(object: Path|dict) -> list[Cell]:
 
 def load_cells_from_GTUnitObject(data: dict) -> list[Cell]:
     from .Cell import Cell
-    from .GroundTruthUnitObject import GTUnitObject
+    from .GroundTruthUnitsObject import GTUnitsObject
     return [Cell().from_dict(cell_data) for cell_data in data.cells]
 
 def load_cells_from_dict(data: dict) -> list[Cell]:

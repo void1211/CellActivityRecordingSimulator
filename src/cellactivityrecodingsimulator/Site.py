@@ -39,7 +39,7 @@ class Site(BaseObject):
             return False
         return True
     
-    def set_signal(self, signal_type: str, signal: np.ndarray):
+    def set_signal(self, signal_type: str, signal: np.ndarray, dtype: np.dtype=np.int16):
         """
         signal: np.ndarray or list
         signal_type: str
@@ -50,23 +50,23 @@ class Site(BaseObject):
         assert signal_type in ["spike", "drift", "power", "background", "raw", "noise", "filtered"], "Invalid signal type"
 
         if isinstance(signal, list):
-            signal = np.array(signal)
+            signal = np.array(signal, dtype=dtype)
         assert isinstance(signal, np.ndarray), "Signal must be a numpy array or list"
 
         if signal_type == "spike":
-            self._signal_spike = signal
+            self._signal_spike = signal.astype(dtype=dtype)
         elif signal_type == "drift":
-            self._signal_drift = signal
+            self._signal_drift = signal.astype(dtype=dtype)
         elif signal_type == "power":
-            self._signal_power = signal
+            self._signal_power = signal.astype(dtype=dtype)
         elif signal_type == "background":
-            self._signal_background = signal
+            self._signal_background = signal.astype(dtype=dtype)
         elif signal_type == "raw":
-            self._signal_raw = signal
+            self._signal_raw = signal.astype(dtype=dtype)
         elif signal_type == "noise":
-            self._signal_noise = signal
+            self._signal_noise = signal.astype(dtype=dtype)
         elif signal_type == "filtered":
-            self._signal_filtered = signal
+            self._signal_filtered = signal.astype(dtype=dtype)
 
     def get_signal(self, signal_type: str, fs: float=None) -> np.ndarray:
         """
@@ -103,12 +103,16 @@ class Site(BaseObject):
             "background": self.get_signal("background"),
         }
 
-    def from_dict(self, data: dict) -> "Site":
-        super().__init__(x=data.get("x", 0), y=data.get("y", 0), z=data.get("z", 0))
-        self.id = data.get("id", 0)
-        self.set_signal("spike", data.get("spike", np.array([])))
-        self.set_signal("drift", data.get("drift", np.array([])))
-        self.set_signal("power", data.get("power", np.array([])))
-        self.set_signal("background", data.get("background", np.array([])))
-        return self
-        
+    @classmethod    
+    def from_dict(cls, data: dict) -> "Site":
+        site = cls(
+            id=data.get("id", 0),
+            x=data.get("x", 0),
+            y=data.get("y", 0),
+            z=data.get("z", 0),
+        )
+        site.set_signal("spike", data.get("spike", np.array([])))
+        site.set_signal("drift", data.get("drift", np.array([])))
+        site.set_signal("power", data.get("power", np.array([])))
+        site.set_signal("background", data.get("background", np.array([])))
+        return site

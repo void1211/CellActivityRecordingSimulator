@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from ..GroundTruthUnitObject import GTUnitObject
+from ..GroundTruthUnitsObject import GTUnitObject
 from probeinterface import Probe
 from probeinterface.plotting import plot_probe
 

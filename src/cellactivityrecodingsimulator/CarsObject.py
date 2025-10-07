@@ -6,6 +6,7 @@ from .Settings import Settings
 from .Cell import Cell
 from .Site import Site
 from spikeinterface.core import NumpyRecording
+from probeinterface import Probe
 from tqdm import tqdm
 
 
@@ -55,30 +56,18 @@ class CarsObject:
             "noise_cells": [noise_cell.to_dict() for noise_cell in self._noise_cells],
             }
 
-    def from_dict(self, data: dict) -> "CarsObject":
-        self._settings = Settings.from_dict(data["settings"])
-        self._cells = [Cell.from_dict(cell) for cell in data["cells"]]
-        self._sites = [Site.from_dict(site) for site in data["sites"]]
-        self._noise_cells = [Cell.from_dict(noise_cell) for noise_cell in data["noise_cells"]]
-        return self
-
-    def get_NumpyRecording(self, t_starts: List[float]=[0]) -> NumpyRecording:
-        """
-        t_starts: List[float]
-        """
-        traces = []
-        channel_ids = []
-        for site in self._sites:
-            traces.append(site.get_signal("raw"))
-            channel_ids.append(site.id)
-        traces = np.array(traces).T
-        recording = NumpyRecording(
-            traces,
-            self._settings.to_dict()["baseSettings"]["fs"],
-            t_starts=t_starts,
-            channel_ids=channel_ids
-            )
-        return recording
+    @classmethod
+    def from_dict(cls, data: dict) -> "CarsObject":
+        settings = Settings.from_dict(data["settings"])
+        cells = [Cell.from_dict(cell) for cell in data["cells"]]
+        sites = [Site.from_dict(site) for site in data["sites"]]
+        noise_cells = [Cell.from_dict(noise_cell) for noise_cell in data["noise_cells"]]
+        return cls(
+            settings=settings,
+            cells=cells,
+            sites=sites,
+            noise_cells=noise_cells,
+        )
 
     def save_npz(self, filepath: Path):
         """
@@ -91,7 +80,8 @@ class CarsObject:
         np.savez(filepath, **data_dict)
 
 
-    def load_npz(self, file_path: Path):
+    @classmethod
+    def load_npz(cls, file_path: Path) -> "CarsObject":
         """
         npz形式からCarsObjectを読み込む
         
@@ -102,38 +92,44 @@ class CarsObject:
             CarsObject: 読み込まれたCarsObject
         """
         # npzファイルを読み込み
-        data = np.load(file_path, allow_pickle=True)
-        
-        # 設定を復元
-        settings = Settings(data['settings'])
-        
-        # セルデータを復元
-        cells = []
-        if 'cells' in data:
-            for cell in tqdm(data['cells'], desc="Loading cells", total=len(data['cells'])):
-                cells.append(Cell.from_dict(cell))
-        else:
-            cells = []
-        
-        # ノイズセルデータを復元
-        if 'noise_cells' in data:
-            for noise_cell in tqdm(data['noise_cells'], desc="Loading noise cells", total=len(data['noise_cells'])):
-                noise_cells.append(Cell.from_dict(noise_cell))
-        else:
-            noise_cells = []
-        
-        # サイトデータを復元
-        sites = []
-        if 'sites' in data:
-            for site in tqdm(data['sites'], desc="Loading sites", total=len(data['sites'])):
-                sites.append(Site.from_dict(site))
-        else:
-            sites = []
+        with np.load(file_path, allow_pickle=True) as data:
+            data_dict = {
+                "settings": data["settings"].item(),
+                "cells": data["cells"],
+                "noise_cells": data["noise_cells"],
+                "sites": data["sites"],
+            }
+            print(f"CarsObject loaded from {file_path}")
+            return cls.from_dict(data_dict)
 
-        self._settings = settings
-        self._cells = cells
-        self._sites = sites
-        self._noise_cells = noise_cells
+
+    def get_NumpyRecording(self, t_starts: List[float]=[0]) -> NumpyRecording:
+        """
+        t_starts: List[float]
+        """
+        traces = []
+        channel_ids = []
+        for site in self._sites:
+            traces.append(site.get_signal("raw"))
+            channel_ids.append(site.id)
+        traces = np.array(traces).T
+        channel_ids = np.array(channel_ids)
         
-        print(f"CarsObject loaded from {file_path}")
-        return self
+        fs = self._settings.to_dict()["baseSettings"]["fs"]
+            
+        recording = NumpyRecording(
+            traces,
+            fs,
+            t_starts=t_starts,
+            channel_ids=channel_ids
+            )
+        return recording
+
+    def get_cells_position(self, as_array: bool=False) -> List[List[float]]:
+        cells_position = []
+        for cell in self._cells:
+            cells_position.append([cell.x, cell.y, cell.z])
+        if as_array:
+            return np.array(cells_position)
+        return cells_position
+
