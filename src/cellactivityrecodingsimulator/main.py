@@ -1,36 +1,36 @@
 import numpy as np
-import random
 from tqdm import tqdm
 import logging
 import argparse
 from pathlib import Path
-import sys
 from probeinterface import Probe
 
-from .GroundTruthUnitsObject import GTUnitObject
+from .GroundTruthUnitsObject import GTUnitsObject
+from .BackGroundUnitsObject import BGUnitsObject
 from .CarsObject import CarsObject
 from .Settings import Settings
-from .Settings import default_settings, default_cells, default_sites
-from .carsIO import load_settings_from_json, load_cells_from_json, load_sites_from_Probe, load_sites_from_json, save_data, load_noise_file, load_spike_templates
+from .carsIO import load_settings_from_json, load_units_from_json, load_contacts_from_Probe, load_contacts_from_json, save_data, load_noise_file, load_spike_templates
 from .Noise import RandomNoise, DriftNoise, PowerLineNoise
-from .Template import make_similar_templates, GaborTemplate, ExponentialTemplate
-from .generate import make_noise_cells, make_background_activity, make_spike_times
-from .calculate import calculate_spike_max_amplitude, calculate_scaled_spike_amplitude, calculate_distance_two_objects
+from .Template import BaseTemplate
+from .calculate import calculate_scaled_spike_amplitude, calculate_distance_two_objects
 from .tools import addSpikeToSignal, make_save_dir
 from .plot.main import plot_main
+from .ProbeObject import ProbeObject
 # ベースディレクトリを固定
 BASE_DIR = Path("simulations")
 TEST_DIR = Path("test")
 SETTINGS_FILE = Path("settings.json")
-CELLS_FILE = Path("cells.json")
+UNITS_FILE = Path("cells.json")
 PROBE_FILE = Path("probe.json")
 
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-def init_run(settings: Settings, dir: Path):
+def init_run(settings: Settings, dir: Path, verbose):
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
+    else:
+        logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
     baseSettings = settings.rootSettings.to_dict()
-    validate_settings(settings)
-    set_seed(baseSettings)
     # 保存ディレクトリの作成
     if baseSettings["pathSaveDir"] is None:
         pathSaveDir = dir
@@ -40,258 +40,179 @@ def init_run(settings: Settings, dir: Path):
     saveDir = make_save_dir(pathSaveDir)
     return saveDir
 
-def set_seed(baseSettings: dict):
-    random.seed(baseSettings["random_seed"])
-    np.random.seed(baseSettings["random_seed"])
-
-def validate_settings(settings: Settings):
-    logging.info("設定の検証を開始")
-    errors = settings.validate()
-    if len(errors) == 0:
-        logging.info("設定の有効性を確認")
-    else:
-        logging.error(f"無効な設定を確認. 処理を停止: {errors}")
-        sys.exit(1)
-
 def load_files(object: Path|Probe, type: str):
     if type == "settings":
         return load_settings_from_json(object)
-    elif type == "cells":
-        return load_cells_from_json(object)
+    elif type == "units":
+        return load_units_from_json(object)
     elif type == "probe" and isinstance(object, Path):
-        return load_sites_from_json(object)
+        return load_contacts_from_json(object)
     elif type == "probe" and isinstance(object, Probe):
-        return load_sites_from_Probe(object)
+        return load_contacts_from_Probe(object)
     else:
         raise ValueError(f"Invalid file type")
 
-def run(dir: Path, settings:Path=None, cells:Path|GTUnitObject=None, probe:Path|Probe=None, plot: bool=False, verbose: bool=False):
+def run(
+    dir: Path, 
+    settings:Path|Settings|dict|None=None, 
+    units:Path|GTUnitsObject|dict|None=None, 
+    probe:Path|Probe|None=None, 
+    plot: bool=False, 
+    verbose: bool=False
+    ):
     """単一の実験を実行する"""
     try:
+        print(type(settings))
+        print(type(units))
+        print(type(probe))
         logging.info(f"=== 実験開始 ===")
-        if verbose:
-            logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-        else:
-            logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-        if settings is not None:
-            settings = load_files(settings, "settings")
-        else:
-            settings = Settings(default_settings())
+        settings = Settings.load(settings)
         logging.info(f"設定ファイル読み込み完了")
         
         # セルデータの読み込み
-        if cells is not None:
-            if isinstance(cells, Path):
-                cells = load_files(cells, "cells")
-            elif isinstance(cells, GTUnitObject):
-                cells = cells.cells
-            else:
-                raise ValueError(f"Invalid cells type")
-        else:
-            cells = default_cells()
-        logging.info(f"セルデータ読み込み完了: {len(cells)} cells")
+        gt_units = GTUnitsObject.load(units, settings=settings.to_dict())
+        logging.info(f"セルデータ読み込み完了: {gt_units.get_units_num()} units")
         
         # サイトデータの読み込み
-        if probe is not None:
-            sites = load_files(probe, "probe")
-        else:
-            sites = default_sites()
-        logging.info(f"サイトデータ読み込み完了: {len(sites)} sites")
+        probe = ProbeObject.load(probe)
+        logging.info(f"サイトデータ読み込み完了: {probe.get_contacts_num()} contacts")
 
-        saveDir = init_run(settings, Path(dir)) 
+        saveDir = init_run(settings, Path(dir), verbose) 
 
-        baseSettings = settings.rootSettings.to_dict()
-        spikeSettings = settings.spikeSetting.to_dict()
-        noiseSettings = settings.noiseSettings.to_dict()
-        driftSettings = settings.driftSettings.to_dict()
-        powerNoiseSettings = settings.powerNoiseSettings.to_dict()
-        templateSimilarityControlSettings = settings.templateSimilarityControlSettings.to_dict()
-
+        settings = settings.to_dict()
         # ノイズの適用
         logging.info(f"=== ノイズ生成と記録点への適用 ===")
-        if noiseSettings["noiseType"] == "truth":
-            truthNoiseSettings = noiseSettings["truth"]
-            for site in tqdm(sites, desc="ノイズ割振中", total=len(sites)):
-                site.set_signal(
-                    "background", 
-                    load_noise_file(
-                        truthNoiseSettings["pathNoise"]
-                        ))
-        elif noiseSettings["noiseType"] == "normal":  
-            normalNoiseSettings = noiseSettings["normal"]
-            for site in tqdm(sites, desc="ノイズ割振中", total=len(sites)):
-                site.set_signal("background", 
-                RandomNoise(
-                    baseSettings["fs"], 
-                    baseSettings["duration"], 
-                    normalNoiseSettings["amplitude"]
-                    ).generate("normal"))
-        elif noiseSettings["noiseType"] == "gaussian":
-            gaussianNoiseSettings = noiseSettings["gaussian"]
-            for site in tqdm(sites, desc="ノイズ割振中", total=len(sites)):
-                site.set_signal("background", 
-                RandomNoise(
-                    baseSettings["fs"], 
-                    baseSettings["duration"], 
-                    gaussianNoiseSettings["amplitude"], 
-                    gaussianNoiseSettings["location"], 
-                    gaussianNoiseSettings["scale"]
-                    ).generate("gaussian"))
-        elif noiseSettings["noiseType"] == "model":
+        if settings["noiseSettings"]["noiseType"] == "truth":
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
+                noise = load_noise_file(settings["noiseSettings"]["truth"]["pathNoise"])
+                contact.set_signal("background", noise)
+
+        elif settings["noiseSettings"]["noiseType"] == "normal":  
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
+                noise = RandomNoise.generate("normal", settings)
+                contact.set_signal("background", noise)
+
+        elif settings["noiseSettings"]["noiseType"] == "gaussian":
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
+                noise = RandomNoise.generate("gaussian", settings)
+                contact.set_signal("background", noise)
+
+        elif settings["noiseSettings"]["noiseType"] == "model":
             # ノイズ細胞を生成してサイトに追加
-            noise_cells = make_noise_cells(
-                baseSettings["duration"], 
-                baseSettings["fs"], 
-                sites, 
-                spikeSettings,
-                noiseSettings
-                )
-            for site in tqdm(sites, desc="ノイズ割振中", total=len(sites)):
-                site.set_signal("background", 
-                make_background_activity(
-                    baseSettings["duration"], 
-                    baseSettings["fs"], 
-                    noise_cells, 
-                    site, 
-                    spikeSettings["attenTime"]
-                    ))
-        elif noiseSettings["noiseType"] == "none":
-            for site in tqdm(sites, desc="ノイズ割振中", total=len(sites)):
-                site.set_signal("background", 
-                np.zeros(int(baseSettings["duration"] * baseSettings["fs"])))
+            bg_units = BGUnitsObject.generate(settings, probe.contacts)
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
+                
+                noise = bg_units.make_background_activity(contact, settings["spikeSettings"]["attenTime"], settings)
+                contact.set_signal("background", noise)
+
+        elif settings["noiseSettings"]["noiseType"] == "none":
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
+                noise = np.zeros(int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"]))
+                contact.set_signal("background", noise)
+
         else:
             raise ValueError(f"Invalid noise type")
         
-        # スパイクテンプレートの読み込み
+        # スパイクテンプレートの生成
         logging.info(f"=== スパイク活動の生成 ===")
-        if spikeSettings["spikeType"] in ["gabor", "exponential"]:
-            if templateSimilarityControlSettings["enable"]:
-                group_ids = list(set([cell.group for cell in cells]))
-                for group_id in group_ids:
-                    group_cells = [cell for cell in cells if cell.group == group_id]
-                    spikeTemplates = make_similar_templates(
-                        baseSettings["fs"], 
-                        templateSimilarityControlSettings,
-                        spikeSettings,
-                        len(group_cells)
-                        )
-                    for i, cell in enumerate(group_cells):
-                        cell.spikeTemp = spikeTemplates[i]
-                        cell.spikeTimeList = make_spike_times(
-                            baseSettings["duration"], 
-                            baseSettings["fs"], 
-                            spikeSettings["rate"], 
-                            spikeSettings["refractoryPeriod"]
-                            )
-                        logging.debug(f"cell{cell.id}.spikeTimeList: {len(cell.spikeTimeList)}")
-                        for t in cell.spikeTimeList:
-                            cell.spikeAmpList.append(
-                                calculate_spike_max_amplitude(
-                                    spikeSettings["amplitudeMax"], 
-                                    spikeSettings["amplitudeMin"])
-                                )
+        
+        def is_valid_template(unit):
+            """ユニットのテンプレートが有効かどうかをチェック"""
+            return (
+                hasattr(unit, 'spikeTemp') and 
+                unit.spikeTemp is not None and
+                hasattr(unit.spikeTemp, 'template') and
+                len(unit.spikeTemp.template) > 1
+            )
+        
+        if settings["spikeSettings"]["spikeType"] in ["gabor", "exponential"]:
+            if settings["templateSimilarityControlSettings"]["enable"]:
+                # 類似度制御が有効な場合：グループごとに類似テンプレートを生成
+                for group_id in set(unit.group for unit in gt_units.units):
+                    group_units = [u for u in gt_units.units if u.group == group_id]
+                    base_template = None
+                    
+                    for unit in group_units:
+                        if base_template is None:
+                            if not is_valid_template(unit):
+                                unit.spikeTemp = BaseTemplate.generate(settings)
+                            base_template = unit.spikeTemp
+                        else:
+                            unit.spikeTemp = base_template.generate_similar_template(settings)
             else:
-                for i, cell in enumerate(cells):
-                    if spikeSettings["spikeType"] == "gabor":
-                        cell.spikeTemp = GaborTemplate(baseSettings["fs"], spikeSettings).generate()
-                    elif spikeSettings["spikeType"] == "exponential":
-                        cell.spikeTemp = ExponentialTemplate(baseSettings["fs"], spikeSettings).generate()
-                    else:
-                        raise ValueError(f"Invalid spike type")
-                    cell.spikeTimeList = make_spike_times(
-                        baseSettings["duration"], 
-                        baseSettings["fs"], 
-                        spikeSettings["rate"], 
-                        spikeSettings["refractoryPeriod"]
-                        )
-                    cell.spikeAmpList = [calculate_spike_max_amplitude(
-                        spikeSettings["amplitudeMax"], 
-                        spikeSettings["amplitudeMin"]
-                        ) for _ in range(len(cell.spikeTimeList))]
+                # 類似度制御が無効な場合：各ユニットに独立したテンプレートを生成
+                for unit in gt_units.units:
+                    if not is_valid_template(unit):
+                        unit.spikeTemp = BaseTemplate.generate(settings)
 
-        elif spikeSettings["spikeType"] == "template":
-            templateSettings = spikeSettings["template"]
-            template_file = Path(dir) / templateSettings["pathSpikeList"]
+        elif settings["spikeSettings"]["spikeType"] == "template":
+            # ファイルからテンプレートを読み込む
+            template_file = Path(dir) / settings["spikeSettings"]["template"]["pathSpikeList"]
             if not template_file.exists():
                 logging.error(f"テンプレートファイルが見つかりません: {template_file}")
                 return False
-            spikeTemplates = load_spike_templates(template_file)
-            for i, cell in enumerate(cells):
-                cell.spikeTemp = spikeTemplates[i]
-                cell.spikeTimeList = make_spike_times(
-                    baseSettings["duration"], 
-                    baseSettings["fs"], 
-                    spikeSettings["rate"], 
-                    spikeSettings["refractoryPeriod"])
-                cell.spikeAmpList = [calculate_spike_max_amplitude(
-                    spikeSettings["amplitudeMax"], 
-                    spikeSettings["amplitudeMin"]
-                    ) for _ in range(len(cell.spikeTimeList))]
+            
+            templates = BaseTemplate.load_spike_templates(template_file)
+            for i, unit in enumerate(gt_units.units):
+                unit.spikeTemp = templates[i] if i < len(templates) else templates[-1]
+                if i >= len(templates):
+                    logging.warning(f"テンプレート不足: ユニット{i}には最後のテンプレートを使用")
         else:
-            raise ValueError(f"Invalid spike type")
+            raise ValueError(f"Invalid spike type: {settings['spikeSettings']['spikeType']}")
 
         # 信号生成
         logging.info(f"=== 信号生成 ===")
-        if driftSettings["enable"]:
-            drift = DriftNoise(
-                baseSettings["fs"], 
-                baseSettings["duration"], 
-                driftSettings
-                ).generate()
-        else:
-            drift = np.zeros(int(baseSettings["duration"] * baseSettings["fs"]))
-        if powerNoiseSettings["enable"]:
-            powerLineNoise = PowerLineNoise(
-                baseSettings["fs"], 
-                baseSettings["duration"], 
-                powerNoiseSettings
-                ).generate()
-        else:
-            powerLineNoise = np.zeros(int(baseSettings["duration"] * baseSettings["fs"]))
+        
+        # 全ユニットのテンプレートを検証
+        for i, unit in enumerate(gt_units.units):
+            if not is_valid_template(unit):
+                logging.error(f"ユニット{i} (ID: {unit.id})のテンプレートが無効です")
+                raise ValueError(f"ユニット{i}のテンプレートが無効です")
+        
+        logging.info(f"全{len(gt_units.units)}ユニットのテンプレートを確認 - 正常")
+        
+        # ノイズ信号の生成
+        duration_samples = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
+        drift = DriftNoise.generate(settings) if settings["driftSettings"]["enable"] else np.zeros(duration_samples)
+        powerLineNoise = PowerLineNoise.generate(settings) if settings["powerNoiseSettings"]["enable"] else np.zeros(duration_samples)
 
-        for site in tqdm(sites, total=len(sites)):
-            spike = np.zeros(int(baseSettings["duration"] * baseSettings["fs"]))
-            for cell in cells:
-                scaledSpikeAmpList = calculate_scaled_spike_amplitude(
-                    cell.spikeAmpList, 
-                    calculate_distance_two_objects(cell, site), 
-                    spikeSettings["attenTime"]
-                    )
-                spike = addSpikeToSignal(
-                    spike, 
-                    cell.spikeTimeList, 
-                    cell.spikeTemp, 
-                    scaledSpikeAmpList
-                    )
-            site.set_signal("spike", spike)
-            site.set_signal("drift", drift)
-            site.set_signal("power", powerLineNoise)
+        for contact in tqdm(probe.contacts, total=len(probe.contacts)):
+            spike_signal = np.zeros(duration_samples)
+            
+            for unit in gt_units.units:
+                scaled_amps = calculate_scaled_spike_amplitude(
+                    unit.spikeAmpList, 
+                    calculate_distance_two_objects(unit, contact), 
+                    settings["spikeSettings"]["attenTime"]
+                )
+                spike_signal = addSpikeToSignal(
+                    spike_signal, 
+                    unit.spikeTimeList, 
+                    unit.spikeTemp.template, 
+                    scaled_amps
+                )
+            
+            contact.set_signal("spike", spike_signal)
+            contact.set_signal("drift", drift)
+            contact.set_signal("power", powerLineNoise)
             
 
         # データの保存
         logging.info(f"=== データの保存 ===")
-        logging.info(f"保存先ディレクトリ: {saveDir}")
-        logging.info(f"saveDirの型: {type(saveDir)}")
-        logging.info(f"saveDirの絶対パス: {saveDir.absolute() if hasattr(saveDir, 'absolute') else 'N/A'}")
-        
         if saveDir is None:
-            logging.error("保存先ディレクトリがNoneです。データ保存をスキップします。")
+            logging.error("保存先ディレクトリがNoneです")
             return False
-            
-        save_data(
-            saveDir, 
-            cells, 
-            sites, 
-            noise_cells=noise_cells if noiseSettings["noiseType"] == "model" else None, 
-            fs=baseSettings["fs"])
+        
+        noise_units_list = bg_units.units if (settings["noiseSettings"]["noiseType"] == "model" and bg_units) else None
+        save_data(saveDir, gt_units.units, probe.contacts, noise_units=noise_units_list, fs=settings["baseSettings"]["fs"])
         logging.info(f"データ保存完了: {saveDir}")
 
         # プロット表示（オプション）
         if plot:
-            plot_main(cells, noise_cells, sites, dir)
+            plot_main(gt_units.units, noise_units_list, probe.contacts, str(dir.name), saveDir)
 
         logging.info(f"=== 実験完了 ===")
-        return CarsObject(settings, cells, sites, noise_cells if noiseSettings["noiseType"] == "model" else None)
+        return CarsObject(settings, gt_units.units, probe.contacts, noise_units_list)
         
     except Exception as e:
         logging.error(f"実験でエラー発生 - {e}", exc_info=True)
@@ -341,7 +262,7 @@ def main(project_root: Path, args: argparse.Namespace):
             for i, condition_name in enumerate(condition_names, 1):
                 logging.info(f"\n[{i}/{len(condition_names)}] {condition_name} を実行中...")
                 exam = example_dir/condition_name
-                if run(exam, plot=args.plot):
+                if run(exam, plot=args.plot, settings=Path(exam)/SETTINGS_FILE, units=Path(exam)/UNITS_FILE, probe=Path(exam)/PROBE_FILE):
                     success_count += 1
                 else:
                     logging.error(f"実験が失敗しました: {condition_name}")
@@ -360,7 +281,7 @@ def main(project_root: Path, args: argparse.Namespace):
             for i, condition_name in enumerate(condition_names, 1):
                 logging.info(f"\n[{i}/{len(condition_names)}] {condition_name} を実行中...")
                 exam = example_dir/condition_name
-                if run(exam, settings=exam/SETTINGS_FILE, cells=exam/CELLS_FILE, probe=exam/PROBE_FILE, plot=args.plot):
+                if run(exam, settings=Path(exam)/SETTINGS_FILE, units=Path(exam)/UNITS_FILE, probe=Path(exam)/PROBE_FILE, plot=args.plot):
                     success_count += 1
                 else:
                     logging.error(f"実験が失敗しました: {condition_name}")

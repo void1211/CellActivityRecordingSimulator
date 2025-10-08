@@ -5,7 +5,7 @@ class BaseSignal:
     def __init__(self, fs: float, duration: float):
         self._fs = fs
         self._duration = duration
-        self._data = np.zeros(int(duration * fs))
+        self._signal = np.zeros(int(duration * fs))
 
     def __repr__(self):
         return f"BaseSignal(fs={self.fs}, duration={self.duration})"
@@ -22,8 +22,8 @@ class BaseSignal:
         return self._duration
 
     @property
-    def data(self):
-        return self._data
+    def signal(self):
+        return self._signal
 
     @fs.setter
     def fs(self, fs: float):
@@ -35,8 +35,8 @@ class BaseSignal:
         self._check_duration(duration)
         self._duration = duration
 
-    @data.setter
-    def data(self, data: np.ndarray):
+    @signal.setter
+    def signal(self, data: np.ndarray):
         self._check_data(data)
         self._data = data
 

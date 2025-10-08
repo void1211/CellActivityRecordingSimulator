@@ -2,7 +2,7 @@ from .BaseObject import BaseObject
 import numpy as np
 from .tools import filterSignal
 
-class Site(BaseObject):
+class Contact(BaseObject):
     def __init__(self, id: int=0, x: float=None, y: float=None, z: float=None):
         if all(arg is not None for arg in [x, y, z]):
             super().__init__(x=x, y=y, z=z)
@@ -29,7 +29,7 @@ class Site(BaseObject):
         self._id = value
     
     def __str__(self):
-        return f"Site(id={self.id}, x={self.x}, y={self.y}, z={self.z})"
+        return f"Contact(id={self.id}, x={self.x}, y={self.y}, z={self.z})"
 
     def __repr__(self):
         return self.__str__()
@@ -104,15 +104,15 @@ class Site(BaseObject):
         }
 
     @classmethod    
-    def from_dict(cls, data: dict) -> "Site":
-        site = cls(
+    def from_dict(cls, data: dict) -> "Contact":
+        contact = cls(
             id=data.get("id", 0),
             x=data.get("x", 0),
             y=data.get("y", 0),
             z=data.get("z", 0),
         )
-        site.set_signal("spike", data.get("spike", np.array([])))
-        site.set_signal("drift", data.get("drift", np.array([])))
-        site.set_signal("power", data.get("power", np.array([])))
-        site.set_signal("background", data.get("background", np.array([])))
-        return site
+        contact.set_signal("spike", data.get("spike", np.array([])))
+        contact.set_signal("drift", data.get("drift", np.array([])))
+        contact.set_signal("power", data.get("power", np.array([])))
+        contact.set_signal("background", data.get("background", np.array([])))
+        return contact

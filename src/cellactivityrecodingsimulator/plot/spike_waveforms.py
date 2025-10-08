@@ -36,7 +36,7 @@ class TemplateWaveformVisualizer:
         logging.info(f"テンプレート波形可視化設定: ウィンドウ={window_ms}ms, サンプル数={self.window_size}")
     
     def extract_spike_waveforms(self, signal: np.ndarray, spike_times: List[int], 
-                               site_id: int, cell_id: int) -> List[np.ndarray]:
+                               contact_id: int, unit_id: int) -> List[np.ndarray]:
         """指定されたサイトの信号からスパイク波形を切り出す"""
         waveforms = []
         
@@ -54,111 +54,111 @@ class TemplateWaveformVisualizer:
                 if len(waveform) == self.window_size:
                     waveforms.append(waveform)
             else:
-                logging.debug(f"サイト{site_id}, 細胞{cell_id}: スパイク{i}が範囲外 (時刻={spike_time}, 範囲=[{start_idx}:{end_idx}])")
+                logging.debug(f"サイト{contact_id}, 細胞{unit_id}: スパイク{i}が範囲外 (時刻={spike_time}, 範囲=[{start_idx}:{end_idx}])")
         
         return waveforms
     
-    def find_nearby_sites(self, cell: Any, sites: List[Any]) -> List[Tuple[Any, float]]:
+    def find_nearby_contacts(self, unit: Any, contacts: List[Any]) -> List[Tuple[Any, float]]:
         """細胞の近くにあるサイトを見つける"""
-        nearby_sites = []
+        nearby_contacts = []
         
-        for site in sites:
-            distance = calculate_distance_two_objects(cell, site)
+        for contact in contacts:
+            distance = calculate_distance_two_objects(unit, contact)
             if distance <= self.max_distance:
-                nearby_sites.append((site, distance))
+                nearby_contacts.append((contact, distance))
         
         # 距離順にソート
-        nearby_sites.sort(key=lambda x: x[1])
+        nearby_contacts.sort(key=lambda x: x[1])
         
-        logging.debug(f"細胞{cell.id}: 近くのサイト数={len(nearby_sites)}, 最大距離={self.max_distance}μm")
-        for site, dist in nearby_sites[:5]:  # 最初の5個のみ表示
-            logging.debug(f"  サイト{site.id}: 距離={dist:.1f}μm")
+        logging.debug(f"細胞{unit.id}: 近くのサイト数={len(nearby_contacts)}, 最大距離={self.max_distance}μm")
+        for contact, dist in nearby_contacts[:5]:  # 最初の5個のみ表示
+            logging.debug(f"  サイト{contact.id}: 距離={dist:.1f}μm")
         
-        return nearby_sites
+        return nearby_contacts
     
-    def find_best_channel(self, cell: Any, sites: List[Any]) -> int:
+    def find_best_channel(self, unit: Any, contacts: List[Any]) -> int:
         """細胞に最も近いサイト（ベストチャンネル）のインデックスを見つける"""
-        nearby_sites = self.find_nearby_sites(cell, sites)
-        if not nearby_sites:
+        nearby_contacts = self.find_nearby_contacts(unit, contacts)
+        if not nearby_contacts:
             return 0
         
         # 最も近いサイトのインデックスを返す
-        best_site = nearby_sites[0][0]
-        return sites.index(best_site)
+        best_contact = nearby_contacts[0][0]
+        return contacts.index(best_contact)
     
-    def create_waveform_templates(self, cells: List[Any], sites: List[Any]) -> Tuple[np.ndarray, List[int]]:
+    def create_waveform_templates(self, units: List[Any], contacts: List[Any]) -> Tuple[np.ndarray, List[int]]:
         """各細胞の波形テンプレートとベストチャンネルを作成"""
         templates = []
         chan_best = []
         
-        for cell in cells:
+        for unit in units:
             # 近くのサイトを見つける
-            nearby_sites = self.find_nearby_sites(cell, sites)
-            if not nearby_sites:
+            nearby_contacts = self.find_nearby_contacts(unit, contacts)
+            if not nearby_contacts:
                 # 近くのサイトがない場合は空のテンプレート
-                empty_template = np.zeros((self.window_size, len(sites)))
+                empty_template = np.zeros((self.window_size, len(contacts)))
                 templates.append(empty_template)
                 chan_best.append(0)
                 continue
             
             # 各サイトの波形を切り出してテンプレートを作成
-            template = np.zeros((self.window_size, len(sites)))
+            template = np.zeros((self.window_size, len(contacts)))
             
-            for site_idx, site in enumerate(sites):
+            for contact_idx, contact in enumerate(contacts):
                 waveforms = self.extract_spike_waveforms(
-                    site.get_signal("raw"), cell.spikeTimeList, site.id, cell.id
+                    contact.get_signal("raw"), unit.spikeTimeList, contact.id, unit.id
                 )
                 
                 if waveforms:
                     # 平均波形を計算
                     if len(waveforms) > 1:
-                        template[:, site_idx] = np.mean(waveforms, axis=0)
+                        template[:, contact_idx] = np.mean(waveforms, axis=0)
                     else:
-                        template[:, site_idx] = waveforms[0]
+                        template[:, contact_idx] = waveforms[0]
             
             templates.append(template)
             
             # ベストチャンネル（最も近いサイト）を記録
-            best_chan = self.find_best_channel(cell, sites)
+            best_chan = self.find_best_channel(unit, contacts)
             chan_best.append(best_chan)
         
         return np.array(templates), chan_best
     
-    def plot_probe_waveforms(self, cells: List[Any], sites: List[Any], 
+    def plot_probe_waveforms(self, units: List[Any], contacts: List[Any], 
                             condition_name: str = "", save_dir: Path = None, 
                             max_units_per_plot: int = 40, channels_per_unit: int = 16) -> plt.Figure:
         """プローブ位置ベースで波形を可視化（元のコードを参考）"""
         
         # プローブの位置情報を取得
-        xc = np.array([site.x for site in sites])
-        yc = np.array([site.y for site in sites])
+        xc = np.array([contact.x for contact in contacts])
+        yc = np.array([contact.y for contact in contacts])
         
         # 波形テンプレートとベストチャンネルを作成
-        templates, chan_best = self.create_waveform_templates(cells, sites)
+        templates, chan_best = self.create_waveform_templates(units, contacts)
         
         # 全細胞の波形をプロット
         print(f'~~~~~~~~~~~~~~ All units ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
         print('title = number of spikes from each unit')
         
-        if not cells:
-            print("No cells found")
+        if not units:
+            print("No units found")
             return None
         
         fig = plt.figure(figsize=(12, 3), dpi=150)
         grid = plt.GridSpec(2, 20, figure=fig, hspace=0.25, wspace=0.5)
         
         # 各ユニットの波形をプロット
-        for k in range(min(max_units_per_plot, len(cells))):
+        for k in range(min(max_units_per_plot, len(units))):
             # ランダムにユニットを選択
-            if len(cells) > 1:
-                wi = np.random.randint(len(cells))
+            if len(units) > 1:
+                wi = np.random.randint(len(units))
             else:
                 wi = 0
             
             # テンプレートとベストチャンネルを取得
             wv = templates[wi].copy()
             cb = chan_best[wi]
-            nsp = len(cells[wi].spikeTimeList)
+            nsp = len(units[wi].spikeTimeList)
             
             # サブプロットを作成
             ax = fig.add_subplot(grid[k//20, k%20])
@@ -181,11 +181,11 @@ class TemplateWaveformVisualizer:
             ax.axis('off')
         
         # 使用されていないサブプロットを非表示
-        for k in range(len(cells), max_units_per_plot):
+        for k in range(len(units), max_units_per_plot):
             ax = fig.add_subplot(grid[k//20, k%20])
             ax.set_visible(False)
         
-        plt.suptitle(f'All Units - {condition_name}', fontsize=14)
+        plt.suptitle(f'All Unitss - {condition_name}', fontsize=14)
         
         # 保存
         if save_dir is not None:
@@ -197,24 +197,24 @@ class TemplateWaveformVisualizer:
         
         return fig
     
-    def plot_cell_waveforms_on_probe(self, cells: List[Any], sites: List[Any], 
+    def plot_unit_waveforms_on_probe(self, units: List[Any], contacts: List[Any], 
                                     condition_name: str = "", save_dir: Path = None,
-                                    max_cells: int = 20) -> plt.Figure:
+                                    max_units: int = 20) -> plt.Figure:
         """特定の細胞の波形をプローブ位置に配置して表示"""
         
         # プローブの位置情報を取得
-        xc = np.array([site.x for site in sites])
-        yc = np.array([site.y for site in sites])
+        xc = np.array([contact.x for contact in contacts])
+        yc = np.array([contact.y for contact in contacts])
         
         # 細胞数を制限
-        n_cells = min(max_cells, len(cells))
+        n_units = min(max_units, len(units))
         
         # サブプロットのレイアウトを決定
-        cols = min(5, n_cells)
-        rows = (n_cells + cols - 1) // cols
+        cols = min(5, n_units)
+        rows = (n_units + cols - 1) // cols
         
         fig, axes = plt.subplots(rows, cols, figsize=(4*cols, 3*rows))
-        if n_cells == 1:
+        if n_units == 1:
             axes = np.array([axes])
         elif rows == 1:
             axes = axes.reshape(1, -1)
@@ -223,15 +223,15 @@ class TemplateWaveformVisualizer:
         else:
             axes = axes.reshape(rows, cols)
         
-        fig.suptitle(f'Cell Waveforms on Probe - {condition_name}', fontsize=16)
+        fig.suptitle(f'Unit Waveforms on Probe - {condition_name}', fontsize=16)
         
-        for cell_idx in range(n_cells):
-            if cell_idx >= rows * cols:
+        for unit_idx in range(n_units):
+            if unit_idx >= rows * cols:
                 break
             
             # 行と列のインデックスを計算
-            row_idx = cell_idx // cols
-            col_idx = cell_idx % cols
+            row_idx = unit_idx // cols
+            col_idx = unit_idx % cols
             
             # axesから正しいサブプロットを取得
             if rows == 1 and cols == 1:
@@ -243,24 +243,24 @@ class TemplateWaveformVisualizer:
             else:
                 ax = axes[row_idx, col_idx]
             
-            cell = cells[cell_idx]
+            unit = units[unit_idx]
             
             # 近くのサイトを見つける
-            nearby_sites = self.find_nearby_sites(cell, sites)
-            if not nearby_sites:
-                ax.text(0.5, 0.5, f'Cell {cell.id}\nNo nearby sites', 
+            nearby_contacts = self.find_nearby_contacts(unit, contacts)
+            if not nearby_contacts:
+                ax.text(0.5, 0.5, f'Unit {unit.id}\nNo nearby contacts', 
                        ha='center', va='center', transform=ax.transAxes)
-                ax.set_title(f'Cell {cell.id}')
+                ax.set_title(f'Unit {unit.id}')
                 continue
             
             # 各サイトの波形を描画
             amp = 3  # 振幅のスケール係数
-            colors = plt.cm.viridis(np.linspace(0, 1, len(nearby_sites)))
+            colors = plt.cm.viridis(np.linspace(0, 1, len(nearby_contacts)))
             
-            for site_idx, (site, distance) in enumerate(nearby_sites):
+            for contact_idx, (contact, distance) in enumerate(nearby_contacts):
                 # スパイク波形を切り出し
                 waveforms = self.extract_spike_waveforms(
-                    site.signalRaw, cell.spikeTimeList, site.id, cell.id
+                    contact.signalRaw, unit.spikeTimeList, contact.id, unit.id
                 )
                 
                 if not waveforms:
@@ -277,13 +277,13 @@ class TemplateWaveformVisualizer:
                 t /= len(wv) / 15  # スケーリング
                 
                 # プローブ位置に波形を配置
-                xi, yi = site.x, site.y
-                color = colors[site_idx]
+                xi, yi = contact.x, contact.y
+                color = colors[contact_idx]
                 ax.plot(xi + t, yi + wv * amp, lw=1, color=color, alpha=0.8,
-                       label=f'Site {site.id} (d={distance:.0f}μm)')
+                       label=f'Contact {contact.id} (d={distance:.0f}μm)')
             
             # 軸の設定
-            ax.set_title(f'Cell {cell.id} - {len(nearby_sites)} sites')
+            ax.set_title(f'Unit {unit.id} - {len(nearby_contacts)} contacts')
             ax.grid(True, alpha=0.3)
             ax.legend(fontsize=6, loc='upper right')
             
@@ -292,7 +292,7 @@ class TemplateWaveformVisualizer:
             ax.set_ylim(min(yc) - 50, max(yc) + 50)
         
         # 使用されていないサブプロットを非表示
-        for i in range(n_cells, rows * cols):
+        for i in range(n_units, rows * cols):
             row_idx = i // cols
             col_idx = i % cols
             if rows == 1 and cols == 1:
@@ -308,7 +308,7 @@ class TemplateWaveformVisualizer:
         
         # 保存
         if save_dir is not None:
-            save_path = save_dir / f'cell_waveforms_on_probe_{condition_name}.png'
+            save_path = save_dir / f'unit_waveforms_on_probe_{condition_name}.png'
             fig.savefig(save_path, dpi=300, bbox_inches='tight')
             logging.info(f"細胞波形プローブプロットを保存しました: {save_path}")
         
@@ -338,7 +338,7 @@ class ProbeWaveformVisualizer:
         logging.info(f"プローブ波形可視化設定: ウィンドウ={window_ms}ms, サンプル数={self.window_size}")
     
     def extract_spike_waveforms(self, signal: np.ndarray, spike_times: List[int], 
-                               site_id: int, cell_id: int) -> List[np.ndarray]:
+                               contact_id: int, unit_id: int) -> List[np.ndarray]:
         """指定されたサイトの信号からスパイク波形を切り出す"""
         waveforms = []
         
@@ -356,80 +356,80 @@ class ProbeWaveformVisualizer:
                 if len(waveform) == self.window_size:
                     waveforms.append(waveform)
             else:
-                logging.debug(f"サイト{site_id}, 細胞{cell_id}: スパイク{i}が範囲外 (時刻={spike_time}, 範囲=[{start_idx}:{end_idx}])")
+                logging.debug(f"サイト{contact_id}, 細胞{unit_id}: スパイク{i}が範囲外 (時刻={spike_time}, 範囲=[{start_idx}:{end_idx}])")
         
         return waveforms
     
-    def find_nearby_sites(self, cell: Any, sites: List[Any]) -> List[Tuple[Any, float]]:
+    def find_nearby_contacts(self, unit: Any, contacts: List[Any]) -> List[Tuple[Any, float]]:
         """細胞の近くにあるサイトを見つける"""
-        nearby_sites = []
+        nearby_contacts = []
         
-        for site in sites:
-            distance = calculate_distance_two_objects(cell, site)
+        for contact in contacts:
+            distance = calculate_distance_two_objects(unit, contact)
             if distance <= self.max_distance:
-                nearby_sites.append((site, distance))
+                nearby_contacts.append((contact, distance))
         
         # 距離順にソート
-        nearby_sites.sort(key=lambda x: x[1])
+        nearby_contacts.sort(key=lambda x: x[1])
         
-        logging.debug(f"細胞{cell.id}: 近くのサイト数={len(nearby_sites)}, 最大距離={self.max_distance}μm")
-        for site, dist in nearby_sites[:5]:  # 最初の5個のみ表示
-            logging.debug(f"  サイト{site.id}: 距離={dist:.1f}μm")
+        logging.debug(f"細胞{unit.id}: 近くのサイト数={len(nearby_contacts)}, 最大距離={self.max_distance}μm")
+        for contact, dist in nearby_contacts[:5]:  # 最初の5個のみ表示
+            logging.debug(f"  サイト{contact.id}: 距離={dist:.1f}μm")
         
-        return nearby_sites
+        return nearby_contacts
     
-    def plot_probe_waveforms(self, cells: List[Any], sites: List[Any], 
+    def plot_probe_waveforms(self, units: List[Any], contacts: List[Any], 
                             condition_name: str = "", save_dir: Path = None, 
                             max_units_per_plot: int = 40, channels_per_unit: int = 16) -> plt.Figure:
         """プローブ位置ベースで波形を可視化"""
         
         # プローブの位置情報を取得
-        xc = np.array([site.x for site in sites])
-        yc = np.array([site.y for site in sites])
+        xc = np.array([contact.x for contact in contacts])
+        yc = np.array([contact.y for contact in contacts])
         
         # 全細胞の波形をプロット
         print(f'~~~~~~~~~~~~~~ All units ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
         print('title = number of spikes from each unit')
         
-        if not cells:
-            print("No cells found")
+        if not units:
+            print("No units found")
             return None
         
         fig = plt.figure(figsize=(12, 3), dpi=150)
         grid = plt.GridSpec(2, 20, figure=fig, hspace=0.25, wspace=0.5)
         
         # 各ユニットの波形をプロット
-        for k in range(min(max_units_per_plot, len(cells))):
+        for k in range(min(max_units_per_plot, len(units))):
             # ランダムにユニットを選択
-            if len(cells) > 1:
-                wi = np.random.randint(len(cells))
+            if len(units) > 1:
+                wi = np.random.randint(len(units))
             else:
                 wi = 0
             
-            cell = cells[wi]
-            nsp = len(cell.spikeTimeList)
+            unit = units[wi]
+            nsp = len(unit.spikeTimeList)
             
             # サブプロットを作成
             ax = fig.add_subplot(grid[k//20, k%20])
             
             # 近くのサイトを見つける
-            nearby_sites = self.find_nearby_sites(cell, sites)
-            if not nearby_sites:
-                ax.text(0.5, 0.5, 'No nearby sites', ha='center', va='center', transform=ax.transAxes)
+            nearby_contacts = self.find_nearby_contacts(unit, contacts)
+            if not nearby_contacts:
+                ax.text(0.5, 0.5, 'No nearby contacts', ha='center', va='center', transform=ax.transAxes)
                 ax.set_title(f'{nsp}', fontsize='small')
                 ax.axis('off')
                 continue
             
             # チャンネル数を制限
-            n_chan = min(channels_per_unit, len(nearby_sites))
-            selected_sites = nearby_sites[:n_chan]
+            n_chan = min(channels_per_unit, len(nearby_contacts))
+            selected_contacts = nearby_contacts[:n_chan]
             
             # 各サイトの波形を描画
             amp = 4  # 振幅のスケール係数
-            for ii, (site, distance) in enumerate(selected_sites):
+            for ii, (contact, distance) in enumerate(selected_contacts):
                 # スパイク波形を切り出し
                 waveforms = self.extract_spike_waveforms(
-                    site.signalRaw, cell.spikeTimeList, site.id, cell.id
+                    contact.signalRaw, unit.spikeTimeList, contact.id, unit.id
                 )
                 
                 if not waveforms:
@@ -446,18 +446,18 @@ class ProbeWaveformVisualizer:
                 t /= len(wv) / 20  # スケーリング
                 
                 # プローブ位置に波形を配置
-                xi, yi = site.x, site.y
+                xi, yi = contact.x, contact.y
                 ax.plot(xi + t, yi + wv * amp, lw=0.5, color='k', alpha=0.7)
             
             ax.set_title(f'{nsp}', fontsize='small')
             ax.axis('off')
         
         # 使用されていないサブプロットを非表示
-        for k in range(len(cells), max_units_per_plot):
+        for k in range(len(units), max_units_per_plot):
             ax = fig.add_subplot(grid[k//20, k%20])
             ax.set_visible(False)
         
-        plt.suptitle(f'All Units - {condition_name}', fontsize=14)
+        plt.suptitle(f'All Unitss - {condition_name}', fontsize=14)
         
         # 保存
         if save_dir is not None:
@@ -493,7 +493,7 @@ class SpikeWaveformPlotter:
         logging.info(f"波形切り出し設定: ウィンドウ={window_ms}ms, サンプル数={self.window_size}")
     
     def extract_spike_waveforms(self, signal: np.ndarray, spike_times: List[int], 
-                               site_id: int, cell_id: int) -> List[np.ndarray]:
+                               contact_id: int, unit_id: int) -> List[np.ndarray]:
         """指定されたサイトの信号からスパイク波形を切り出す"""
         waveforms = []
         
@@ -511,29 +511,29 @@ class SpikeWaveformPlotter:
                 if len(waveform) == self.window_size:
                     waveforms.append(waveform)
             else:
-                logging.debug(f"サイト{site_id}, 細胞{cell_id}: スパイク{i}が範囲外 (時刻={spike_time}, 範囲=[{start_idx}:{end_idx}])")
+                logging.debug(f"サイト{contact_id}, 細胞{unit_id}: スパイク{i}が範囲外 (時刻={spike_time}, 範囲=[{start_idx}:{end_idx}])")
         
         return waveforms
     
-    def find_nearby_sites(self, cell: Any, sites: List[Any]) -> List[Tuple[Any, float]]:
+    def find_nearby_contacts(self, unit: Any, contacts: List[Any]) -> List[Tuple[Any, float]]:
         """細胞の近くにあるサイトを見つける"""
-        nearby_sites = []
+        nearby_contacts = []
         
-        for site in sites:
-            distance = calculate_distance_two_objects(cell, site)
+        for contact in contacts:
+            distance = calculate_distance_two_objects(unit, contact)
             if distance <= self.max_distance:
-                nearby_sites.append((site, distance))
+                nearby_contacts.append((contact, distance))
         
         # 距離順にソート
-        nearby_sites.sort(key=lambda x: x[1])
+        nearby_contacts.sort(key=lambda x: x[1])
         
-        logging.debug(f"細胞{cell.id}: 近くのサイト数={len(nearby_sites)}, 最大距離={self.max_distance}μm")
-        for site, dist in nearby_sites[:5]:  # 最初の5個のみ表示
-            logging.debug(f"  サイト{site.id}: 距離={dist:.1f}μm")
+        logging.debug(f"細胞{unit.id}: 近くのサイト数={len(nearby_contacts)}, 最大距離={self.max_distance}μm")
+        for contact, dist in nearby_contacts[:5]:  # 最初の5個のみ表示
+            logging.debug(f"  サイト{contact.id}: 距離={dist:.1f}μm")
         
-        return nearby_sites
+        return nearby_contacts
     
-    def plot_cell_spike_waveforms(self, cells: List[Any], sites: List[Any], 
+    def plot_unit_spike_waveforms(self, units: List[Any], contacts: List[Any], 
                                  condition_name: str = "", save_dir: Path = None) -> plt.Figure:
         """各細胞のスパイク波形を重ね書きしてプロット"""
         
@@ -541,19 +541,19 @@ class SpikeWaveformPlotter:
         time_ms = np.linspace(-self.window_ms/2, self.window_ms/2, self.window_size)
         
         # 細胞ごとにプロット
-        n_cells = len(cells)
-        if n_cells == 0:
+        n_units = len(units)
+        if n_units == 0:
             logging.warning("細胞が存在しません")
             return None
         
         # サブプロットのレイアウトを決定
-        cols = min(3, n_cells)  # 最大3列
-        rows = (n_cells + cols - 1) // cols
+        cols = min(3, n_units)  # 最大3列
+        rows = (n_units + cols - 1) // cols
         
         fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows))
         
         # axesの形状を適切に処理
-        if n_cells == 1:
+        if n_units == 1:
             axes = np.array([axes])
         elif rows == 1:
             axes = axes.reshape(1, -1)
@@ -569,13 +569,13 @@ class SpikeWaveformPlotter:
         
         fig.suptitle(f'Spike Waveforms - {condition_name}', fontsize=16)
         
-        for cell_idx, cell in enumerate(cells):
-            if cell_idx >= rows * cols:
+        for unit_idx, unit in enumerate(units):
+            if unit_idx >= rows * cols:
                 break
                 
             # 行と列のインデックスを計算
-            row_idx = cell_idx // cols
-            col_idx = cell_idx % cols
+            row_idx = unit_idx // cols
+            col_idx = unit_idx % cols
             
             # axesから正しいサブプロットを取得
             if rows == 1 and cols == 1:
@@ -588,28 +588,28 @@ class SpikeWaveformPlotter:
                 ax = axes[row_idx, col_idx]
             
             # 近くのサイトを見つける
-            nearby_sites = self.find_nearby_sites(cell, sites)
+            nearby_contacts = self.find_nearby_contacts(unit, contacts)
             
-            if not nearby_sites:
-                ax.text(0.5, 0.5, f'Cell {cell.id}\nNo nearby sites', 
+            if not nearby_contacts:
+                ax.text(0.5, 0.5, f'Unit {unit.id}\nNo nearby contacts', 
                        ha='center', va='center', transform=ax.transAxes)
-                ax.set_title(f'Cell {cell.id}')
+                ax.set_title(f'Unit {unit.id}')
                 continue
             
             # 各サイトの波形を描画
-            colors = plt.cm.viridis(np.linspace(0, 1, len(nearby_sites)))
+            colors = plt.cm.viridis(np.linspace(0, 1, len(nearby_contacts)))
             
-            for site_idx, (site, distance) in enumerate(nearby_sites):
+            for contact_idx, (contact, distance) in enumerate(nearby_contacts):
                 # スパイク波形を切り出し
                 waveforms = self.extract_spike_waveforms(
-                    site.signalRaw, cell.spikeTimeList, site.id, cell.id
+                    contact.signalRaw, unit.spikeTimeList, contact.id, unit.id
                 )
                 
                 if not waveforms:
                     continue
                 
                 # 波形を重ね書き
-                color = colors[site_idx]
+                color = colors[contact_idx]
                 alpha = 0.7
                 
                 for waveform in waveforms:
@@ -619,15 +619,15 @@ class SpikeWaveformPlotter:
                 if len(waveforms) > 1:
                     mean_waveform = np.mean(waveforms, axis=0)
                     ax.plot(time_ms, mean_waveform, color=color, linewidth=2, 
-                           label=f'Site {site.id} (d={distance:.0f}μm)')
+                           label=f'Contact {contact.id} (d={distance:.0f}μm)')
                 else:
                     ax.plot(time_ms, waveforms[0], color=color, linewidth=2,
-                           label=f'Site {site.id} (d={distance:.0f}μm)')
+                           label=f'Contact {contact.id} (d={distance:.0f}μm)')
             
             # 軸の設定
             ax.set_xlabel('Time (ms)')
             ax.set_ylabel('Amplitude (μV)')
-            ax.set_title(f'Cell {cell.id} - {len(nearby_sites)} nearby sites')
+            ax.set_title(f'Unit {unit.id} - {len(nearby_contacts)} nearby contacts')
             ax.grid(True, alpha=0.3)
             ax.legend(fontsize=8)
             
@@ -635,7 +635,7 @@ class SpikeWaveformPlotter:
             ax.set_ylim(ax.get_ylim())
         
         # 使用されていないサブプロットを非表示
-        for i in range(n_cells, rows * cols):
+        for i in range(n_units, rows * cols):
             row_idx = i // cols
             col_idx = i % cols
             if rows == 1 and cols == 1:
@@ -657,7 +657,7 @@ class SpikeWaveformPlotter:
         
         return fig
     
-    def plot_site_spike_waveforms(self, cells: List[Any], sites: List[Any], 
+    def plot_contact_spike_waveforms(self, units: List[Any], contacts: List[Any], 
                                  condition_name: str = "", save_dir: Path = None) -> plt.Figure:
         """各サイトのスパイク波形を重ね書きしてプロット"""
         
@@ -665,19 +665,19 @@ class SpikeWaveformPlotter:
         time_ms = np.linspace(-self.window_ms/2, self.window_ms/2, self.window_size)
         
         # サイトごとにプロット
-        n_sites = len(sites)
-        if n_sites == 0:
+        n_contacts = len(contacts)
+        if n_contacts == 0:
             logging.warning("サイトが存在しません")
             return None
         
         # サブプロットのレイアウトを決定
-        cols = min(4, n_sites)  # 最大4列
-        rows = (n_sites + cols - 1) // cols
+        cols = min(4, n_contacts)  # 最大4列
+        rows = (n_contacts + cols - 1) // cols
         
         fig, axes = plt.subplots(rows, cols, figsize=(4*cols, 3*rows))
         
         # axesの形状を適切に処理
-        if n_sites == 1:
+        if n_contacts == 1:
             axes = np.array([axes])
         elif rows == 1:
             axes = axes.reshape(1, -1)
@@ -691,15 +691,15 @@ class SpikeWaveformPlotter:
         logging.debug(f"axes shape: {axes.shape}")
         logging.debug(f"axes type: {type(axes)}")
         
-        fig.suptitle(f'Site Spike Waveforms - {condition_name}', fontsize=16)
+        fig.suptitle(f'Contact Spike Waveforms - {condition_name}', fontsize=16)
         
-        for site_idx, site in enumerate(sites):
-            if site_idx >= rows * cols:
+        for contact_idx, contact in enumerate(contacts):
+            if contact_idx >= rows * cols:
                 break
                 
             # 行と列のインデックスを計算
-            row_idx = site_idx // cols
-            col_idx = site_idx % cols
+            row_idx = contact_idx // cols
+            col_idx = contact_idx % cols
             
             # axesから正しいサブプロットを取得
             if rows == 1 and cols == 1:
@@ -712,22 +712,22 @@ class SpikeWaveformPlotter:
                 ax = axes[row_idx, col_idx]
             
             # 各細胞のスパイク波形を描画
-            colors = plt.cm.tab10(np.linspace(0, 1, min(10, len(cells))))
+            colors = plt.cm.tab10(np.linspace(0, 1, min(10, len(units))))
             
-            for cell_idx, cell in enumerate(cells):
-                if cell_idx >= 10:  # 最大10個の細胞まで
+            for unit_idx, unit in enumerate(units):
+                if unit_idx >= 10:  # 最大10個の細胞まで
                     break
                     
                 # スパイク波形を切り出し
                 waveforms = self.extract_spike_waveforms(
-                    site.signalRaw, cell.spikeTimeList, site.id, cell.id
+                    contact.signalRaw, unit.spikeTimeList, contact.id, unit.id
                 )
                 
                 if not waveforms:
                     continue
                 
                 # 波形を重ね書き
-                color = colors[cell_idx % len(colors)]
+                color = colors[unit_idx % len(colors)]
                 alpha = 0.6
                 
                 for waveform in waveforms:
@@ -737,23 +737,23 @@ class SpikeWaveformPlotter:
                 if len(waveforms) > 1:
                     mean_waveform = np.mean(waveforms, axis=0)
                     ax.plot(time_ms, mean_waveform, color=color, linewidth=1.5,
-                           label=f'Cell {cell.id}')
+                           label=f'Unit {unit.id}')
                 else:
                     ax.plot(time_ms, waveforms[0], color=color, linewidth=1.5,
-                           label=f'Cell {cell.id}')
+                           label=f'Unit {unit.id}')
             
             # 軸の設定
             ax.set_xlabel('Time (ms)')
             ax.set_ylabel('Amplitude (μV)')
-            ax.set_title(f'Site {site.id}')
+            ax.set_title(f'Contact {contact.id}')
             ax.grid(True, alpha=0.3)
             
             # 凡例は最初のサイトのみ表示（スペース節約）
-            if site_idx == 0:
+            if contact_idx == 0:
                 ax.legend(fontsize=6, loc='upper right')
         
         # 使用されていないサブプロットを非表示
-        for i in range(n_sites, rows * cols):
+        for i in range(n_contacts, rows * cols):
             row_idx = i // cols
             col_idx = i % cols
             if rows == 1 and cols == 1:
@@ -769,13 +769,13 @@ class SpikeWaveformPlotter:
         
         # 保存
         if save_dir is not None:
-            save_path = save_dir / f'site_waveforms_{condition_name}.png'
+            save_path = save_dir / f'contact_waveforms_{condition_name}.png'
             fig.savefig(save_path, dpi=300, bbox_inches='tight')
             logging.info(f"サイト波形プロットを保存しました: {save_path}")
         
         return fig
     
-    def plot_waveform_statistics(self, cells: List[Any], sites: List[Any], 
+    def plot_waveform_statistics(self, units: List[Any], contacts: List[Any], 
                                 condition_name: str = "", save_dir: Path = None) -> plt.Figure:
         """波形の統計情報をプロット"""
         
@@ -784,35 +784,35 @@ class SpikeWaveformPlotter:
         
         # 1. 各サイトでの検出スパイク数
         ax1 = axes[0, 0]
-        site_spike_counts = []
-        site_ids = []
+        contact_spike_counts = []
+        contact_ids = []
         
-        for site in sites:
+        for contact in contacts:
             total_spikes = 0
-            for cell in cells:
+            for unit in units:
                 waveforms = self.extract_spike_waveforms(
-                    site.signalRaw, cell.spikeTimeList, site.id, cell.id
+                    contact.signalRaw, unit.spikeTimeList, contact.id, unit.id
                 )
                 total_spikes += len(waveforms)
             
-            site_spike_counts.append(total_spikes)
-            site_ids.append(site.id)
+            contact_spike_counts.append(total_spikes)
+            contact_ids.append(contact.id)
         
-        ax1.bar(site_ids, site_spike_counts, alpha=0.7)
-        ax1.set_xlabel('Site ID')
+        ax1.bar(contact_ids, contact_spike_counts, alpha=0.7)
+        ax1.set_xlabel('Contact ID')
         ax1.set_ylabel('Total Spikes Detected')
-        ax1.set_title('Spikes per Site')
+        ax1.set_title('Spikes per Contact')
         ax1.grid(True, alpha=0.3)
         
         # 2. 各細胞の総スパイク数
         ax2 = axes[0, 1]
-        cell_spike_counts = [len(cell.spikeTimeList) for cell in cells]
-        cell_ids = [cell.id for cell in cells]
+        unit_spike_counts = [len(unit.spikeTimeList) for unit in units]
+        unit_ids = [unit.id for unit in units]
         
-        ax2.bar(cell_ids, cell_spike_counts, alpha=0.7)
-        ax2.set_xlabel('Cell ID')
+        ax2.bar(unit_ids, unit_spike_counts, alpha=0.7)
+        ax2.set_xlabel('Unit ID')
         ax2.set_ylabel('Total Spikes')
-        ax2.set_title('Spikes per Cell')
+        ax2.set_title('Spikes per Unit')
         ax2.grid(True, alpha=0.3)
         
         # 3. 距離vs検出スパイク数の関係
@@ -820,12 +820,12 @@ class SpikeWaveformPlotter:
         distances = []
         detected_spikes = []
         
-        for cell in cells:
-            for site in sites:
-                distance = calculate_distance_two_objects(cell, site)
+        for unit in units:
+            for contact in contacts:
+                distance = calculate_distance_two_objects(unit, contact)
                 if distance <= self.max_distance:
                     waveforms = self.extract_spike_waveforms(
-                        site.signalRaw, cell.spikeTimeList, site.id, cell.id
+                        contact.signalRaw, unit.spikeTimeList, contact.id, unit.id
                     )
                     distances.append(distance)
                     detected_spikes.append(len(waveforms))
@@ -840,10 +840,10 @@ class SpikeWaveformPlotter:
         ax4 = axes[1, 1]
         all_amplitudes = []
         
-        for cell in cells:
-            for site in sites:
+        for unit in units:
+            for contact in contacts:
                 waveforms = self.extract_spike_waveforms(
-                    site.signalRaw, cell.spikeTimeList, site.id, cell.id
+                    contact.signalRaw, unit.spikeTimeList, contact.id, unit.id
                 )
                 for waveform in waveforms:
                     amplitude = np.max(np.abs(waveform))
@@ -866,11 +866,11 @@ class SpikeWaveformPlotter:
         
         return fig
 
-def plot_main(cells: List[Any], sites: List[Any], condition_name: str = "", 
+def plot_main(units: List[Any], contacts: List[Any], condition_name: str = "", 
               save_dir: Path = None) -> Dict[str, plt.Figure]:
     """メインのプロット関数"""
     
-    logging.info(f"スパイク波形プロット開始: 細胞数={len(cells)}, サイト数={len(sites)}")
+    logging.info(f"スパイク波形プロット開始: 細胞数={len(units)}, サイト数={len(contacts)}")
     
     # プロッターの初期化
     plotter = SpikeWaveformPlotter()
@@ -881,33 +881,33 @@ def plot_main(cells: List[Any], sites: List[Any], condition_name: str = "",
     try:
         # # 1. 細胞ごとのスパイク波形
         # logging.info("細胞ごとのスパイク波形をプロット中...")
-        # cell_fig = plotter.plot_cell_spike_waveforms(cells, sites, condition_name, save_dir)
-        # if cell_fig:
-        #     figures['cell_waveforms'] = cell_fig
+        # unit_fig = plotter.plot_unit_spike_waveforms(units, contacts, condition_name, save_dir)
+        # if unit_fig:
+        #     figures['unit_waveforms'] = unit_fig
         
         # # 2. サイトごとのスパイク波形
         # logging.info("サイトごとのスパイク波形をプロット中...")
-        # site_fig = plotter.plot_site_spike_waveforms(cells, sites, condition_name, save_dir)
-        # if site_fig:
-        #     figures['site_waveforms'] = site_fig
+        # contact_fig = plotter.plot_contact_spike_waveforms(units, contacts, condition_name, save_dir)
+        # if contact_fig:
+        #     figures['contact_waveforms'] = contact_fig
         
         # # 3. 波形統計
         # logging.info("波形統計をプロット中...")
-        # stats_fig = plotter.plot_waveform_statistics(cells, sites, condition_name, save_dir)
+        # stats_fig = plotter.plot_waveform_statistics(units, contacts, condition_name, save_dir)
         # if stats_fig:
         #     figures['statistics'] = stats_fig
         
         # 4. テンプレートベースのプローブ位置波形可視化
         logging.info("テンプレートベースのプローブ位置波形可視化中...")
-        probe_fig = template_visualizer.plot_probe_waveforms(cells, sites, condition_name, save_dir)
+        probe_fig = template_visualizer.plot_probe_waveforms(units, contacts, condition_name, save_dir)
         if probe_fig:
             figures['probe_waveforms'] = probe_fig
         
         # # 5. 細胞波形のプローブ配置表示
         # logging.info("細胞波形のプローブ配置表示中...")
-        # cell_probe_fig = template_visualizer.plot_cell_waveforms_on_probe(cells, sites, condition_name, save_dir)
-        # if cell_probe_fig:
-        #     figures['cell_waveforms_on_probe'] = cell_probe_fig
+        # unit_probe_fig = template_visualizer.plot_unit_waveforms_on_probe(units, contacts, condition_name, save_dir)
+        # if unit_probe_fig:
+        #     figures['unit_waveforms_on_probe'] = unit_probe_fig
         
  
         plt.show()

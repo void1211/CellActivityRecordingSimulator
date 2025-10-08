@@ -2,8 +2,12 @@
 from pathlib import Path
 import json
 import logging
+from typing import Union
 from .BaseSettings import BaseSettings
-from .carsIO import load_cells_from_json, load_sites_from_json
+from .carsIO import load_settings_from_json
+import random
+import numpy as np
+
 class Settings(BaseSettings):
     def __init__(self, data: dict=None):
         super().__init__(data)
@@ -13,6 +17,11 @@ class Settings(BaseSettings):
         self.driftSettings = DriftSettings(safe_get(data, "driftSettings"))
         self.powerNoiseSettings = PowerNoiseSettings(safe_get(data, "powerNoiseSettings"))
         self.templateSimilarityControlSettings = TemplateSimilarityControlSettings(safe_get(data, "templateSimilarityControlSettings"))
+
+        self.get_validation_summary()
+
+        random.seed(self.rootSettings.random_seed)
+        np.random.seed(self.rootSettings.random_seed)
 
     def validate(self) -> list[str]:
         """
@@ -45,6 +54,19 @@ class Settings(BaseSettings):
         else:
             return f"✗ 設定に{len(errors)}個のエラーがあります:\n" + "\n".join(f"  - {error}" for error in errors)
 
+    @classmethod
+    def load(cls, object: Union[Path, "Settings", dict, None]) -> "Settings":
+        if object is None:
+            return cls(default_settings())
+        elif isinstance(object, Path):
+            return load_settings_from_json(object)
+        elif isinstance(object, Settings):
+            return object
+        elif isinstance(object, dict):
+            return cls.from_dict(object)
+        else:
+            raise ValueError(f"Invalid object: {object}")
+        
     @classmethod
     def from_dict(cls, data: dict) -> "Settings":
         data_dict = {
@@ -132,17 +154,17 @@ class SpikeSettings(BaseSettings):
 
     def validate(self) -> list[str]:
         errors = []
-        if self.avgSpikeRate <= 0:
+        if self.avgSpikeRate is None or self.avgSpikeRate <= 0:
             errors.append("avgSpikeRate error.")
-        if self.isRefractory and self.refractoryPeriod < 0:
+        if self.isRefractory and (self.refractoryPeriod is None or self.refractoryPeriod < 0):
             errors.append("refractoryPeriod error.")
-        if self.absolute_refractory_ratio < 0 or self.absolute_refractory_ratio > 1:
+        if self.absolute_refractory_ratio is not None and (self.absolute_refractory_ratio < 0 or self.absolute_refractory_ratio > 1):
             errors.append("absolute_refractory_ratio error.")
         if self.spikeType not in ["gabor", "exponential", "template", "truth"]:
             errors.append(f"spikeType error.")
-        if self.amplitudeMax is None or self.amplitudeMax <= 0 or self.amplitudeMax <= self.amplitudeMin:
+        if self.amplitudeMax is None or self.amplitudeMax <= 0 or (self.amplitudeMin is not None and self.amplitudeMax <= self.amplitudeMin):
             errors.append("amplitudeMax error.")
-        if self.amplitudeMin is None or self.amplitudeMin <= 0 or self.amplitudeMin >= self.amplitudeMax:
+        if self.amplitudeMin is None or self.amplitudeMin <= 0 or (self.amplitudeMax is not None and self.amplitudeMin >= self.amplitudeMax):
             errors.append("amplitudeMin error.")
         return errors
 
@@ -473,27 +495,27 @@ class TruthNoiseSettings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
         self.pathNoise = safe_get(data, "pathNoise")
-        self.pathSites = safe_get(data, "pathSites")
+        self.pathContacts = safe_get(data, "pathContacts")
     def validate(self) -> list[str]:
         errors = []
         if self.pathNoise is None:
             errors.append("pathNoise error.")
-        if self.pathSites is None:
-            errors.append("pathSites error.")
+        if self.pathContacts is None:
+            errors.append("pathContacts error.")
         return errors
 
     @classmethod
     def from_dict(cls, data: dict) -> "TruthNoiseSettings":
         data_dict = {
             "pathNoise": safe_get(data, "pathNoise"),
-            "pathSites": safe_get(data, "pathSites"),
+            "pathContacts": safe_get(data, "pathContacts"),
         }
         return cls(data_dict)
 
     def to_dict(self) -> dict:
         data_dict = {
             "pathNoise": self.pathNoise,
-            "pathSites": self.pathSites,
+            "pathContacts": self.pathContacts,
         }
         return data_dict
 
@@ -754,7 +776,7 @@ class TemplateSimilarityControlSettings(BaseSettings):
         }
         return data_dict
 
-def default_settings(key: str=None) -> dict:
+def default_settings() -> dict:
     default_settings ={
         "baseSettings":{
             "name": "default",
@@ -814,7 +836,7 @@ def default_settings(key: str=None) -> dict:
             },
             "truth":{
                 "pathNoise": "test_example_condition1.noise",
-                "pathSites": "test_example_condition1.sites",
+                "pathContacts": "test_example_condition1.contacts",
             },
         },
         "driftSettings":{
@@ -851,33 +873,12 @@ def default_settings(key: str=None) -> dict:
     }
     return default_settings
 
-def default_cells() -> dict:
-    default_cells = {
-        "id": [1, 2, 3, 4, 5, 6, 7, 8],
-        "x": [0, 0, 0, 0, 0, 0, 0, 0],
-        "y": [0, 50, 100, 150, 200, 250, 300, 350],
-        "z": [0, 0, 0, 0, 0, 0, 0, 0]
-    }
-    default_cells = load_cells_from_json(default_cells)
-    return default_cells
-
-def default_sites() -> dict:
-    default_sites = {
-        "id": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-        "x": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-        "y": [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375],
-        "z": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-    }
-    default_sites = load_sites_from_json(default_sites)
-    return default_sites
-
 def safe_get(data: dict, key: str, default: any=None) -> any:
     try:
         return data[key]
-    except KeyError:
-        return {}
+    except (KeyError, TypeError):
+        return default if default is not None else None
 
-@classmethod
 def convert_legacySettings(legacySettings: dict) -> dict:
     """レガシーな設定を新しい設定に変換する"""
     
@@ -940,7 +941,7 @@ def convert_legacySettings(legacySettings: dict) -> dict:
             },
             "truth": {
                 "pathNoise": safe_get(legacySettings, "pathNoise"),
-                "pathSites": safe_get(legacySettings, "pathSites"),
+                "pathContacts": safe_get(legacySettings, "pathContacts"),
             },
         },
         "driftSettings": {

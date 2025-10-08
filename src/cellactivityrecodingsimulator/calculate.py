@@ -1,11 +1,5 @@
 import numpy as np
 
-
-def calculate_spike_max_amplitude(ampMax: float, ampMin: float) -> float:
-    """スパイク振幅を計算する"""
-    return np.random.uniform(ampMin, ampMax)
-
-
 def calculate_scaled_spike_amplitude(
     spikeAmpList: list[float],
     distance: float,

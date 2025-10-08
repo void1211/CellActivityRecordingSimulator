@@ -3,8 +3,8 @@ import numpy as np
 import json
 from pathlib import Path
 from .Settings import Settings
-from .Cell import Cell
-from .Site import Site
+from .Unit import Unit
+from .Contact import Contact
 from spikeinterface.core import NumpyRecording
 from probeinterface import Probe
 from tqdm import tqdm
@@ -14,20 +14,20 @@ class CarsObject:
     def __init__(
     self, 
     settings: Settings=None, 
-    cells: List[Cell]=None, 
-    sites: List[Site]=None,
-    noise_cells: List[Cell]=None,
+    units: List[Unit]=None, 
+    contacts: List[Contact]=None,
+    noise_units: List[Unit]=None,
     ):
         self._settings = settings
-        self._cells = cells
-        self._sites = sites
-        self._noise_cells = noise_cells
+        self._units = units
+        self._contacts = contacts
+        self._noise_units = noise_units
 
     def __str__(self):
-        if self._noise_cells is None:
-            return f"{len(self._cells)} units - {len(self._sites)} ch - no noise units"
+        if self._noise_units is None:
+            return f"{len(self._units)} units - {len(self._contacts)} ch - no noise units"
         else:
-            return f"{len(self._cells)} units - {len(self._sites)} ch - using noise units"
+            return f"{len(self._units)} units - {len(self._contacts)} ch - using noise units"
     
     def __repr__(self):
         return self.__str__()
@@ -37,36 +37,36 @@ class CarsObject:
         return self._settings
 
     @property
-    def cells(self):
-        return self._cells
+    def units(self):
+        return self._units
 
     @property
-    def sites(self):
-        return self._sites
+    def contacts(self):
+        return self._contacts
 
     @property
-    def noise_cells(self):
-        return self._noise_cells
+    def noise_units(self):
+        return self._noise_units
 
     def to_dict(self):
         return {
             "settings": self._settings.to_dict(),
-            "cells": [cell.to_dict() for cell in self._cells],
-            "sites": [site.to_dict() for site in self._sites],
-            "noise_cells": [noise_cell.to_dict() for noise_cell in self._noise_cells],
+            "units": [unit.to_dict() for unit in self._units],
+            "contacts": [contact.to_dict() for contact in self._contacts],
+            "noise_units": [noise_unit.to_dict() for noise_unit in self._noise_units],
             }
 
     @classmethod
     def from_dict(cls, data: dict) -> "CarsObject":
         settings = Settings.from_dict(data["settings"])
-        cells = [Cell.from_dict(cell) for cell in data["cells"]]
-        sites = [Site.from_dict(site) for site in data["sites"]]
-        noise_cells = [Cell.from_dict(noise_cell) for noise_cell in data["noise_cells"]]
+        units = [Unit.from_dict(unit) for unit in data["units"]]
+        contacts = [Contact.from_dict(contact) for contact in data["contacts"]]
+        noise_units = [Unit.from_dict(noise_unit) for noise_unit in data["noise_units"]]
         return cls(
             settings=settings,
-            cells=cells,
-            sites=sites,
-            noise_cells=noise_cells,
+            units=units,
+            contacts=contacts,
+            noise_units=noise_units,
         )
 
     def save_npz(self, filepath: Path):
@@ -95,9 +95,9 @@ class CarsObject:
         with np.load(file_path, allow_pickle=True) as data:
             data_dict = {
                 "settings": data["settings"].item(),
-                "cells": data["cells"],
-                "noise_cells": data["noise_cells"],
-                "sites": data["sites"],
+                "units": data["units"],
+                "noise_units": data["noise_units"],
+                "contacts": data["contacts"],
             }
             print(f"CarsObject loaded from {file_path}")
             return cls.from_dict(data_dict)
@@ -109,9 +109,9 @@ class CarsObject:
         """
         traces = []
         channel_ids = []
-        for site in self._sites:
-            traces.append(site.get_signal("raw"))
-            channel_ids.append(site.id)
+        for contact in self._contacts:
+            traces.append(contact.get_signal("raw"))
+            channel_ids.append(contact.id)
         traces = np.array(traces).T
         channel_ids = np.array(channel_ids)
         
@@ -125,11 +125,11 @@ class CarsObject:
             )
         return recording
 
-    def get_cells_position(self, as_array: bool=False) -> List[List[float]]:
-        cells_position = []
-        for cell in self._cells:
-            cells_position.append([cell.x, cell.y, cell.z])
+    def get_units_position(self, as_array: bool=False) -> List[List[float]]:
+        units_position = []
+        for unit in self._units:
+            units_position.append([unit.x, unit.y, unit.z])
         if as_array:
-            return np.array(cells_position)
-        return cells_position
+            return np.array(units_position)
+        return units_position
 

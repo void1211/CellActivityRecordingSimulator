@@ -5,8 +5,8 @@ import chardet
 import logging
 import os
 
-from .Site import Site
-from .Cell import Cell
+from .Contact import Contact
+from .Unit import Unit
 from probeinterface import Probe
 
 # Windowsの場合はWindowsPathを使用
@@ -52,7 +52,7 @@ def load_settings_from_dict(data: dict) -> "Settings":
     from .Settings import Settings
     return Settings.from_dict(data)
 
-def load_cells_from_json(object: Path|dict) -> list[Cell]:
+def load_units_from_json(object: Path|dict) -> list[Unit]:
     if isinstance(object, Path):
         if not Path(object).exists():
             raise FileNotFoundError(f"セルファイルが見つかりません: {object}")
@@ -60,35 +60,30 @@ def load_cells_from_json(object: Path|dict) -> list[Cell]:
         if Path(object).stat().st_size == 0:
             raise ValueError(f"セルファイルが空です: {object}")
 
-    cells = []
+    units = []
 
     if isinstance(object, dict):
-        jcells = object
+        junits = object
     else:
         with open(object, "r") as f:
-            jcells = json.load(f)
+            junits = json.load(f)
 
-    for i in range(len(jcells["id"])):
-        cell_data = {
-            "id": jcells["id"][i], 
-            "x": jcells["x"][i], 
-            "y": jcells["y"][i], 
-            "z": jcells["z"][i]
+    for i in range(len(junits["id"])):
+        unit_data = {
+            "id": junits["id"][i], 
+            "x": junits["x"][i], 
+            "y": junits["y"][i], 
+            "z": junits["z"][i]
         }
-        cells.append(Cell().from_dict(cell_data)) 
-    return cells
+        units.append(Unit.from_dict(unit_data)) 
+    return units
 
-def load_cells_from_GTUnitObject(data: dict) -> list[Cell]:
-    from .Cell import Cell
-    from .GroundTruthUnitsObject import GTUnitsObject
-    return [Cell().from_dict(cell_data) for cell_data in data.cells]
-
-def load_cells_from_dict(data: dict) -> list[Cell]:
-    from .Cell import Cell
-    return [Cell().from_dict(cell_data) for cell_data in data]
+def load_units_from_dict(data: dict) -> list[Unit]:
+    from .Unit import Unit
+    return [Unit.from_dict(unit_data) for unit_data in data]
 
 
-def load_sites_from_json(object: Path|dict) -> list[Site]:
+def load_contacts_from_json(object: Path|dict) -> list[Contact]:
     if isinstance(object, Path):
         if not Path(object).exists():
             raise FileNotFoundError(f"サイトファイルが見つかりません: {object}")
@@ -96,49 +91,49 @@ def load_sites_from_json(object: Path|dict) -> list[Site]:
         if Path(object).stat().st_size == 0:
             raise ValueError(f"サイトファイルが空です: {object}")
 
-    sites = []
+    contacts = []
     if isinstance(object, dict):
-        jsites = object
+        jcontacts = object
     else:
         with open(object, "r") as f:
-            jsites = json.load(f)
+            jcontacts = json.load(f)
 
-    for i in range(len(jsites["id"])):
-        site_data = {
-            "id": jsites["id"][i], 
-            "x": jsites["x"][i], 
-            "y": jsites["y"][i], 
-            "z": jsites["z"][i]
+    for i in range(len(jcontacts["id"])):
+        contact_data = {
+            "id": jcontacts["id"][i], 
+            "x": jcontacts["x"][i], 
+            "y": jcontacts["y"][i], 
+            "z": jcontacts["z"][i]
         }
-        sites.append(Site().from_dict(site_data))
-    return sites
+        contacts.append(Contact.from_dict(contact_data))
+    return contacts
 
-def load_sites_from_Probe(probeObject) -> list[Site]:
-    sites = []
+def load_contacts_from_Probe(probeObject) -> list[Contact]:
+    contacts = []
     if not isinstance(probeObject, Probe):
         raise ValueError(f"Invalid probe type")
     probe_dict = probeObject.to_dict()
-    site_positions = np.array(probe_dict["contact_positions"])
+    contact_positions = np.array(probe_dict["contact_positions"])
     is_3d = True
-    if site_positions.shape[1] != 3:
+    if contact_positions.shape[1] != 3:
         is_3d = False
-    for i in range(len(site_positions)):
+    for i in range(len(contact_positions)):
         if is_3d:
-            site_data = {
+            contact_data = {
                 "id": i,
-                "x": site_positions[i][0],
-                "y": site_positions[i][1],
-                "z": site_positions[i][2]
+                "x": contact_positions[i][0],
+                "y": contact_positions[i][1],
+                "z": contact_positions[i][2]
             }
         else:
-            site_data = {
+            contact_data = {
                 "id": i,
-                "x": site_positions[i][0],
-                "y": site_positions[i][1],
+                "x": contact_positions[i][0],
+                "y": contact_positions[i][1],
                 "z": 0
             }
-        sites.append(Site().from_dict(site_data))
-    return sites
+        contacts.append(Contact.from_dict(contact_data))
+    return contacts
 
 def load_spike_templates(path: Path) -> list[np.ndarray]:
     spikeTemplates = []
@@ -163,7 +158,7 @@ def load_noise_file(path: Path) -> np.ndarray:
         logging.warning(f"File not found: {path}")
         return None
 
-def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: list[Cell]=None, fs: float=None):
+def save_data(path: Path, units: list[Unit], contacts: list[Contact], noise_units: list[Unit]=None, fs: float=None):
     # パラメータの検証
     if not isinstance(path, Path):
         raise TypeError(f"path must be a Path object, got {type(path)}")
@@ -179,16 +174,16 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: lis
     # todo ファイル名を設定できるようにする
     # todo 必要事項全て保存できるようにする
 
-    signalRaw = np.array([site.get_signal("raw") for site in sites])
-    signalNoise = np.array([site.get_signal("noise") for site in sites])
-    signalFiltered = np.array([site.get_signal("filtered", fs=fs) for site in sites])
-    signalPowerNoise = np.array([site.get_signal("power") for site in sites])
-    signalDrift = np.array([site.get_signal("drift") for site in sites])
-    signalBGNoise = np.array([site.get_signal("background") for site in sites])
-    signalSpike = np.array([site.get_signal("spike") for site in sites])
+    signalRaw = np.array([contact.get_signal("raw") for contact in contacts])
+    signalNoise = np.array([contact.get_signal("noise") for contact in contacts])
+    signalFiltered = np.array([contact.get_signal("filtered", fs=fs) for contact in contacts])
+    signalPowerNoise = np.array([contact.get_signal("power") for contact in contacts])
+    signalDrift = np.array([contact.get_signal("drift") for contact in contacts])
+    signalBGNoise = np.array([contact.get_signal("background") for contact in contacts])
+    signalSpike = np.array([contact.get_signal("spike") for contact in contacts])
 
     # グループ情報を保存
-    group = np.array([cell.group for cell in cells], dtype=object)
+    group = np.array([unit.group for unit in units], dtype=object)
 
     # 浮動小数点データをint16に変換
     signalRaw_int16 = signalRaw.astype(np.int16)
@@ -232,94 +227,94 @@ def save_data(path: Path, cells: list[Cell], sites: list[Site], noise_cells: lis
         logging.error(f"ファイル保存でエラーが発生しました: {e}")
         raise
 
-    cell_ids = []
-    cell_positions = []
+    unit_ids = []
+    unit_positions = []
     spike_times = []
     spike_amps = []
     spike_temps = []
-    for cell in cells:
-        p = [cell.x, cell.y, cell.z]
-        cell_ids.append(cell.id)
-        cell_positions.append(p)
-        spike_times.append(cell.spikeTimeList)
-        spike_amps.append(cell.spikeAmpList)
-        spike_temps.append(cell.spikeTemp)
+    for unit in units:
+        p = [unit.x, unit.y, unit.z]
+        unit_ids.append(unit.id)
+        unit_positions.append(p)
+        spike_times.append(unit.spikeTimeList)
+        spike_amps.append(unit.spikeAmpList)
+        spike_temps.append(unit.spikeTemp.template)
 
-    cell_ids = np.array(cell_ids)
-    cell_positions = np.array(cell_positions)
+    unit_ids = np.array(unit_ids)
+    unit_positions = np.array(unit_positions)
     spike_times = np.array(spike_times, dtype=object)
     spike_amps = np.array(spike_amps, dtype=object)
     spike_temps = np.array(spike_temps, dtype=object)
 
-    site_ids = []
-    site_positions = []
-    for site in sites:
-        p = [site.x, site.y, site.z]
-        site_ids.append(site.id)
-        site_positions.append(p)
+    contact_ids = []
+    contact_positions = []
+    for contact in contacts:
+        p = [contact.x, contact.y, contact.z]
+        contact_ids.append(contact.id)
+        contact_positions.append(p)
 
-    site_ids = np.array(site_ids)
-    site_positions = np.array(site_positions)
+    contact_ids = np.array(contact_ids)
+    contact_positions = np.array(contact_positions)
 
     # 配列はnp.saveで保存（形状とデータ型を保持）
-    np.save(path / "cell_ids.npy", cell_ids)
-    np.save(path / "cell_positions.npy", cell_positions)
-    np.save(path / "site_ids.npy", site_ids)
-    np.save(path / "site_positions.npy", site_positions)
+    np.save(path / "unit_ids.npy", unit_ids)
+    np.save(path / "unit_positions.npy", unit_positions)
+    np.save(path / "contact_ids.npy", contact_ids)
+    np.save(path / "contact_positions.npy", contact_positions)
 
     # object型の配列はnp.saveで保存
     np.save(path / "spike_times.npy", spike_times)
     np.save(path / "spike_amplitudes.npy", spike_amps)
     np.save(path / "spike_templates.npy", spike_temps)
 
-    # probe形式でsitesを保存
-    save_probe_data(path, sites)
+    # probe形式でcontactsを保存
+    save_probe_data(path, contacts)
 
-    if noise_cells is not None:
-        noise_cells_ids = []
-        noise_cells_positions = []
-        noise_cells_spike_times = []
-        noise_cells_spike_amps = []
-        noise_cells_spike_temps = []
-        for noise_cell in noise_cells:
-            p = [noise_cell.x, noise_cell.y, noise_cell.z]
+    if noise_units is not None:
+        noise_units_ids = []
+        noise_units_positions = []
+        noise_units_spike_times = []
+        noise_units_spike_amps = []
+        noise_units_spike_temps = []
+        for noise_unit in noise_units:
+            p = [noise_unit.x, noise_unit.y, noise_unit.z]
 
-            noise_cells_ids.append(noise_cell.id)
-            noise_cells_positions.append(p)
-            noise_cells_spike_times.append(noise_cell.spikeTimeList)
-            noise_cells_spike_amps.append(noise_cell.spikeAmpList)
-            noise_cells_spike_temps.append(noise_cell.spikeTemp)
+            noise_units_ids.append(noise_unit.id)
+            noise_units_positions.append(p)
+            noise_units_spike_times.append(noise_unit.spikeTimeList)
+            noise_units_spike_amps.append(noise_unit.spikeAmpList)
+            noise_units_spike_temps.append(noise_unit.spikeTemp.template)
 
-        noise_cell_ids = np.array(noise_cells_ids)
-        noise_cell_positions = np.array(noise_cells_positions)
-        noise_spike_times = np.array(noise_cells_spike_times, dtype=object)
-        noise_spike_amps = np.array(noise_cells_spike_amps, dtype=object)
-        noise_spike_temps = np.array(noise_cells_spike_temps, dtype=object)
+        noise_unit_ids = np.array(noise_units_ids)
+        noise_unit_positions = np.array(noise_units_positions)
+        noise_spike_times = np.array(noise_units_spike_times, dtype=object)
+        noise_spike_amps = np.array(noise_units_spike_amps, dtype=object)
+        noise_spike_temps = np.array(noise_units_spike_temps, dtype=object)
 
-        np.save(path / "noise_cell_ids.npy", noise_cell_ids)
-        np.save(path / "noise_cell_positions.npy", noise_cell_positions)
-        np.save(path / "noise_cell_spike_times.npy", noise_spike_times)
-        np.save(path / "noise_cell_spike_amplitudes.npy", noise_spike_amps)
-        np.save(path / "noise_cell_spike_templates.npy", noise_spike_temps)
+        np.save(path / "noise_unit_ids.npy", noise_unit_ids)
+        np.save(path / "noise_unit_positions.npy", noise_unit_positions)
+        np.save(path / "noise_unit_spike_times.npy", noise_spike_times)
+        np.save(path / "noise_unit_spike_amplitudes.npy", noise_spike_amps)
+        np.save(path / "noise_unit_spike_templates.npy", noise_spike_temps)
 
 
-def convert_sites_for_kilosort(sites: list[Site]) -> dict:
+def convert_contacts_for_kilosort(contacts: list[Contact]) -> dict:
     """
-    sitesをKilosort用のprobe形式に変換する
+    contactsをKilosort用のprobe形式に変換する
     """
     # チャンネルマップを作成
-    chanMap = [int(site.id) for site in sites]
+    chanMap = [int(contact.id) for contact in contacts]
     if min(chanMap) != 0:
         chanMap = [chanMap[i] - min(chanMap) for i in range(len(chanMap))]
     # 座標を抽出
-    xc = [float(site.x) for site in sites]
-    yc = [float(site.y) for site in sites]
+    xc = [float(contact.x) for contact in contacts]
+    yc = [float(contact.y) for contact in contacts]
 
     # kcoords（プローブグループ）を設定（デフォルトは全て1）
-    kcoords = [0] * len(sites)
+    kcoords = [0] * len(contacts)
 
     # チャンネル数を設定
-    n_chan = int(len(sites))
+    n_chan = int(len(contacts))
 
     probe = {
         'chanMap': chanMap,
@@ -331,11 +326,11 @@ def convert_sites_for_kilosort(sites: list[Site]) -> dict:
     return probe
 
 
-def save_probe_data(path: Path, sites: list[Site]):
+def save_probe_data(path: Path, contacts: list[Contact]):
     """
-    sitesをKilosort用のprobe形式で保存する
+    contactsをKilosort用のprobe形式で保存する
     """
-    probe = convert_sites_for_kilosort(sites)
+    probe = convert_contacts_for_kilosort(contacts)
     # JSON形式で保存
     try:
         with open(str(path / "KS_probe.json"), "w") as f:
