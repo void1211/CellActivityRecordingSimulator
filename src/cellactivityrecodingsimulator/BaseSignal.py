@@ -13,39 +13,3 @@ class BaseSignal:
     def __str__(self):
         return self.__repr__()
 
-    @property
-    def fs(self):
-        return self._fs
-
-    @property
-    def duration(self):
-        return self._duration
-
-    @property
-    def signal(self):
-        return self._signal
-
-    @fs.setter
-    def fs(self, fs: float):
-        self._check_fs(fs)
-        self._fs = fs
-
-    @duration.setter
-    def duration(self, duration: float):
-        self._check_duration(duration)
-        self._duration = duration
-
-    @signal.setter
-    def signal(self, data: np.ndarray):
-        self._check_data(data)
-        self._data = data
-
-    def _check_fs(self, fs: float):
-        assert fs > 0, "fs must be greater than 0"
-
-    def _check_duration(self, duration: float):
-        assert duration > 0, "duration must be greater than 0"
-
-    def _check_data(self, data: np.ndarray):
-        v = data.shape[0] == self.duration * self.fs
-        assert v, "data must be equal to duration * fs"

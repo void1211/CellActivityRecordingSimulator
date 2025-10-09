@@ -1,167 +1,13 @@
 import json
 import numpy as np
-from pathlib import Path, WindowsPath
-import chardet
+from pathlib import Path
 import logging
-import os
 
 from .Contact import Contact
 from .Unit import Unit
-from probeinterface import Probe
-
-# Windowsの場合はWindowsPathを使用
-if os.name == 'nt':
-    Path = WindowsPath
-
-def load_settings_from_json(path: str):
-    from .Settings import Settings
-    # ファイルの存在確認
-    if not Path(path).exists():
-        raise FileNotFoundError(f"設定ファイルが見つかりません: {path}")
-
-    # ファイルサイズの確認
-    file_size = Path(path).stat().st_size
-    if file_size == 0:
-        raise ValueError(f"設定ファイルが空です: {path}")
-
-    # ファイルのエンコーディングを自動検出
-    with open(path, "rb") as f:
-        raw_data = f.read()
-        detected = chardet.detect(raw_data)
-        encoding = detected['encoding']
-
-    try:
-        with open(path, "r", encoding=encoding) as f:
-            content = json.load(f)
-            # logging.info(f"ファイル内容: {repr(content)}")
-            if "baseSettings" not in content:
-                from .Settings import convert_legacySettings
-                content = convert_legacySettings(content)
-            settings = load_settings_from_dict(content)
-            logging.info(f"設定ファイル: {settings}")
-            return settings
-    except json.JSONDecodeError as e:
-        logging.error(f"JSONデコードエラー: {e}")
-        logging.error(f"ファイル内容: {repr(content)}")
-        raise
-    except Exception as e:
-        logging.error(f"その他のエラー: {e}")
-        raise
-
-def load_settings_from_dict(data: dict) -> "Settings":
-    from .Settings import Settings
-    return Settings.from_dict(data)
-
-def load_units_from_json(object: Path|dict) -> list[Unit]:
-    if isinstance(object, Path):
-        if not Path(object).exists():
-            raise FileNotFoundError(f"セルファイルが見つかりません: {object}")
-        
-        if Path(object).stat().st_size == 0:
-            raise ValueError(f"セルファイルが空です: {object}")
-
-    units = []
-
-    if isinstance(object, dict):
-        junits = object
-    else:
-        with open(object, "r") as f:
-            junits = json.load(f)
-
-    for i in range(len(junits["id"])):
-        unit_data = {
-            "id": junits["id"][i], 
-            "x": junits["x"][i], 
-            "y": junits["y"][i], 
-            "z": junits["z"][i]
-        }
-        units.append(Unit.from_dict(unit_data)) 
-    return units
-
-def load_units_from_dict(data: dict) -> list[Unit]:
-    from .Unit import Unit
-    return [Unit.from_dict(unit_data) for unit_data in data]
-
-
-def load_contacts_from_json(object: Path|dict) -> list[Contact]:
-    if isinstance(object, Path):
-        if not Path(object).exists():
-            raise FileNotFoundError(f"サイトファイルが見つかりません: {object}")
-        
-        if Path(object).stat().st_size == 0:
-            raise ValueError(f"サイトファイルが空です: {object}")
-
-    contacts = []
-    if isinstance(object, dict):
-        jcontacts = object
-    else:
-        with open(object, "r") as f:
-            jcontacts = json.load(f)
-
-    for i in range(len(jcontacts["id"])):
-        contact_data = {
-            "id": jcontacts["id"][i], 
-            "x": jcontacts["x"][i], 
-            "y": jcontacts["y"][i], 
-            "z": jcontacts["z"][i]
-        }
-        contacts.append(Contact.from_dict(contact_data))
-    return contacts
-
-def load_contacts_from_Probe(probeObject) -> list[Contact]:
-    contacts = []
-    if not isinstance(probeObject, Probe):
-        raise ValueError(f"Invalid probe type")
-    probe_dict = probeObject.to_dict()
-    contact_positions = np.array(probe_dict["contact_positions"])
-    is_3d = True
-    if contact_positions.shape[1] != 3:
-        is_3d = False
-    for i in range(len(contact_positions)):
-        if is_3d:
-            contact_data = {
-                "id": i,
-                "x": contact_positions[i][0],
-                "y": contact_positions[i][1],
-                "z": contact_positions[i][2]
-            }
-        else:
-            contact_data = {
-                "id": i,
-                "x": contact_positions[i][0],
-                "y": contact_positions[i][1],
-                "z": 0
-            }
-        contacts.append(Contact.from_dict(contact_data))
-    return contacts
-
-def load_spike_templates(path: Path) -> list[np.ndarray]:
-    spikeTemplates = []
-    # ファイルのエンコーディングを自動検出
-    with open(path, "rb") as f:
-        raw_data = f.read()
-        detected = chardet.detect(raw_data)
-        encoding = detected['encoding']
-
-    with open(path, "r", encoding=encoding) as f:
-        jspikeTemplates = json.load(f)
-    for i in range(len(jspikeTemplates["id"])):
-        spikeTemplates.append(np.array(jspikeTemplates["spikeTemplate"][i]))
-    return spikeTemplates
-
-def load_noise_file(path: Path) -> np.ndarray:
-    """真の録音ノイズを取得する"""
-    try:
-        noise = np.load(path).astype(np.float64)
-        return noise
-    except FileNotFoundError:
-        logging.warning(f"File not found: {path}")
-        return None
 
 def save_data(path: Path, units: list[Unit], contacts: list[Contact], noise_units: list[Unit]=None, fs: float=None):
     # パラメータの検証
-    if not isinstance(path, Path):
-        raise TypeError(f"path must be a Path object, got {type(path)}")
 
     logging.info(f"データ保存開始: {path}")
 
@@ -238,7 +84,7 @@ def save_data(path: Path, units: list[Unit], contacts: list[Contact], noise_unit
         unit_positions.append(p)
         spike_times.append(unit.spikeTimeList)
         spike_amps.append(unit.spikeAmpList)
-        spike_temps.append(unit.spikeTemp.template)
+        spike_temps.append(unit.get_templateObject().get_template())
 
     unit_ids = np.array(unit_ids)
     unit_positions = np.array(unit_positions)
@@ -283,7 +129,7 @@ def save_data(path: Path, units: list[Unit], contacts: list[Contact], noise_unit
             noise_units_positions.append(p)
             noise_units_spike_times.append(noise_unit.spikeTimeList)
             noise_units_spike_amps.append(noise_unit.spikeAmpList)
-            noise_units_spike_temps.append(noise_unit.spikeTemp.template)
+            noise_units_spike_temps.append(noise_unit.get_templateObject().get_template())
 
         noise_unit_ids = np.array(noise_units_ids)
         noise_unit_positions = np.array(noise_units_positions)

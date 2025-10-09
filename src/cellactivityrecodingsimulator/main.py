@@ -9,11 +9,10 @@ from .GroundTruthUnitsObject import GTUnitsObject
 from .BackGroundUnitsObject import BGUnitsObject
 from .CarsObject import CarsObject
 from .Settings import Settings
-from .carsIO import load_settings_from_json, load_units_from_json, load_contacts_from_Probe, load_contacts_from_json, save_data, load_noise_file, load_spike_templates
+from .carsIO import save_data
 from .Noise import RandomNoise, DriftNoise, PowerLineNoise
 from .Template import BaseTemplate
-from .calculate import calculate_scaled_spike_amplitude, calculate_distance_two_objects
-from .tools import addSpikeToSignal, make_save_dir
+from .tools import make_save_dir
 from .plot.main import plot_main
 from .ProbeObject import ProbeObject
 # ベースディレクトリを固定
@@ -25,32 +24,19 @@ PROBE_FILE = Path("probe.json")
 
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-def init_run(settings: Settings, dir: Path, verbose):
+def init_run(settings: dict, dir: Path, verbose):
     if verbose:
         logging.basicConfig(level=logging.DEBUG, format='%(asctime)s [%(levelname)s] %(message)s')
     else:
         logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-    baseSettings = settings.rootSettings.to_dict()
     # 保存ディレクトリの作成
-    if baseSettings["pathSaveDir"] is None:
+    if settings["baseSettings"]["pathSaveDir"] is None:
         pathSaveDir = dir
     else:
-        pathSaveDir = baseSettings["pathSaveDir"]
+        pathSaveDir = settings["baseSettings"]["pathSaveDir"]
         
     saveDir = make_save_dir(pathSaveDir)
-    return saveDir
-
-def load_files(object: Path|Probe, type: str):
-    if type == "settings":
-        return load_settings_from_json(object)
-    elif type == "units":
-        return load_units_from_json(object)
-    elif type == "probe" and isinstance(object, Path):
-        return load_contacts_from_json(object)
-    elif type == "probe" and isinstance(object, Probe):
-        return load_contacts_from_Probe(object)
-    else:
-        raise ValueError(f"Invalid file type")
+    settings["baseSettings"]["pathSaveDir"] = saveDir
 
 def run(
     dir: Path, 
@@ -62,29 +48,26 @@ def run(
     ):
     """単一の実験を実行する"""
     try:
-        print(type(settings))
-        print(type(units))
-        print(type(probe))
         logging.info(f"=== 実験開始 ===")
-        settings = Settings.load(settings)
+        settings = Settings.load(settings).to_dict()
         logging.info(f"設定ファイル読み込み完了")
         
         # セルデータの読み込み
-        gt_units = GTUnitsObject.load(units, settings=settings.to_dict())
+        gt_units = GTUnitsObject.load(units, settings=settings)
         logging.info(f"セルデータ読み込み完了: {gt_units.get_units_num()} units")
         
         # サイトデータの読み込み
         probe = ProbeObject.load(probe)
         logging.info(f"サイトデータ読み込み完了: {probe.get_contacts_num()} contacts")
 
-        saveDir = init_run(settings, Path(dir), verbose) 
+        init_run(settings, Path(dir), verbose) 
 
-        settings = settings.to_dict()
         # ノイズの適用
         logging.info(f"=== ノイズ生成と記録点への適用 ===")
         if settings["noiseSettings"]["noiseType"] == "truth":
+            logging.warning("truth noise type is not implemented")
             for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
-                noise = load_noise_file(settings["noiseSettings"]["truth"]["pathNoise"])
+                noise = RandomNoise.generate("normal", settings)
                 contact.set_signal("background", noise)
 
         elif settings["noiseSettings"]["noiseType"] == "normal":  
@@ -99,19 +82,18 @@ def run(
 
         elif settings["noiseSettings"]["noiseType"] == "model":
             # ノイズ細胞を生成してサイトに追加
-            bg_units = BGUnitsObject.generate(settings, probe.contacts)
+            bg_units = BGUnitsObject.generate(settings, probe)
             for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
-                
-                noise = bg_units.make_background_activity(contact, settings["spikeSettings"]["attenTime"], settings)
-                contact.set_signal("background", noise)
+                bg_units.make_background_activity(contact, settings["spikeSettings"]["attenTime"], settings)
 
         elif settings["noiseSettings"]["noiseType"] == "none":
-            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
-                noise = np.zeros(int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"]))
-                contact.set_signal("background", noise)
+            duration_samples = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
+            for contact in probe.contacts:
+                contact.set_signal("background", np.zeros(duration_samples))
 
         else:
-            raise ValueError(f"Invalid noise type")
+            noiseType = settings["noiseSettings"]["noiseType"]
+            raise ValueError(f"Invalid noise type: {noiseType}")
         
         # スパイクテンプレートの生成
         logging.info(f"=== スパイク活動の生成 ===")
@@ -119,10 +101,10 @@ def run(
         def is_valid_template(unit):
             """ユニットのテンプレートが有効かどうかをチェック"""
             return (
-                hasattr(unit, 'spikeTemp') and 
-                unit.spikeTemp is not None and
-                hasattr(unit.spikeTemp, 'template') and
-                len(unit.spikeTemp.template) > 1
+                hasattr(unit, 'templateObject') and 
+                unit.get_templateObject() is not None and
+                hasattr(unit.get_templateObject(), 'template') and
+                len(unit.get_templateObject().get_template()) > 1
             )
         
         if settings["spikeSettings"]["spikeType"] in ["gabor", "exponential"]:
@@ -135,17 +117,19 @@ def run(
                     for unit in group_units:
                         if base_template is None:
                             if not is_valid_template(unit):
-                                unit.spikeTemp = BaseTemplate.generate(settings)
-                            base_template = unit.spikeTemp
+                                unit.set_templateObject(settings=settings)
+                            base_template = unit.get_templateObject()
                         else:
-                            unit.spikeTemp = base_template.generate_similar_template(settings)
+                            new_template = base_template.generate_similar_template(settings)
+                            unit.set_templateObject(template=new_template)
             else:
                 # 類似度制御が無効な場合：各ユニットに独立したテンプレートを生成
                 for unit in gt_units.units:
                     if not is_valid_template(unit):
-                        unit.spikeTemp = BaseTemplate.generate(settings)
+                        unit.set_templateObject(settings=settings)
 
         elif settings["spikeSettings"]["spikeType"] == "template":
+            logging.warning("template spike type is not implemented")
             # ファイルからテンプレートを読み込む
             template_file = Path(dir) / settings["spikeSettings"]["template"]["pathSpikeList"]
             if not template_file.exists():
@@ -154,7 +138,7 @@ def run(
             
             templates = BaseTemplate.load_spike_templates(template_file)
             for i, unit in enumerate(gt_units.units):
-                unit.spikeTemp = templates[i] if i < len(templates) else templates[-1]
+                unit.templateObject = templates[i] if i < len(templates) else templates[-1]
                 if i >= len(templates):
                     logging.warning(f"テンプレート不足: ユニット{i}には最後のテンプレートを使用")
         else:
@@ -172,44 +156,29 @@ def run(
         logging.info(f"全{len(gt_units.units)}ユニットのテンプレートを確認 - 正常")
         
         # ノイズ信号の生成
-        duration_samples = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
-        drift = DriftNoise.generate(settings) if settings["driftSettings"]["enable"] else np.zeros(duration_samples)
-        powerLineNoise = PowerLineNoise.generate(settings) if settings["powerNoiseSettings"]["enable"] else np.zeros(duration_samples)
+        drift = DriftNoise.generate(settings)
+        powerLineNoise = PowerLineNoise.generate(settings)
 
         for contact in tqdm(probe.contacts, total=len(probe.contacts)):
-            spike_signal = np.zeros(duration_samples)
-            
             for unit in gt_units.units:
-                scaled_amps = calculate_scaled_spike_amplitude(
-                    unit.spikeAmpList, 
-                    calculate_distance_two_objects(unit, contact), 
-                    settings["spikeSettings"]["attenTime"]
-                )
-                spike_signal = addSpikeToSignal(
-                    spike_signal, 
-                    unit.spikeTimeList, 
-                    unit.spikeTemp.template, 
-                    scaled_amps
-                )
+                contact.add_spikes(unit, settings)
             
-            contact.set_signal("spike", spike_signal)
-            contact.set_signal("drift", drift)
-            contact.set_signal("power", powerLineNoise)
-            
+            contact.set_signal("drift", drift.signal)
+            contact.set_signal("power", powerLineNoise.signal)
 
         # データの保存
         logging.info(f"=== データの保存 ===")
-        if saveDir is None:
+        if settings["baseSettings"]["pathSaveDir"] is None:
             logging.error("保存先ディレクトリがNoneです")
             return False
         
         noise_units_list = bg_units.units if (settings["noiseSettings"]["noiseType"] == "model" and bg_units) else None
-        save_data(saveDir, gt_units.units, probe.contacts, noise_units=noise_units_list, fs=settings["baseSettings"]["fs"])
-        logging.info(f"データ保存完了: {saveDir}")
+        save_data(settings["baseSettings"]["pathSaveDir"], gt_units.units, probe.contacts, noise_units=noise_units_list, fs=settings["baseSettings"]["fs"])
+        logging.info(f"データ保存完了")
 
         # プロット表示（オプション）
         if plot:
-            plot_main(gt_units.units, noise_units_list, probe.contacts, str(dir.name), saveDir)
+            plot_main(gt_units.units, noise_units_list, probe.contacts, str(dir.name), settings["baseSettings"]["pathSaveDir"])
 
         logging.info(f"=== 実験完了 ===")
         return CarsObject(settings, gt_units.units, probe.contacts, noise_units_list)

@@ -9,29 +9,22 @@ from .Contact import Contact
 class ProbeObject(Probe):
     def __init__(self, contacts: list[Contact]):
         super().__init__()
-        self._contacts = contacts
-
-    @property
-    def contacts(self):
-        return self._contacts
-
-    @contacts.setter
-    def contacts(self, value):
-        self._contacts = value
+        self.contacts = contacts
 
     @classmethod
     def load(cls, object: Union[Path, Probe, dict, None]) -> "ProbeObject":
         if object is None:
-            return cls(cls.default_probe())
+            return cls.default_probe()
         elif isinstance(object, Path):
-            return cls(cls.from_json(object))
+            return cls.from_json(object)
         elif isinstance(object, Probe):
-            return cls(cls.from_Probe(object))
+            return cls.from_Probe(object)
         elif isinstance(object, dict):
-            return cls(cls.from_dict(object))
+            return cls.from_dict(object)
 
     @classmethod
     def default_probe(cls):
+        """デフォルトのプローブを生成する"""
         probe = generate_multi_columns_probe(
             num_columns=1,
             num_contact_per_column=16,
@@ -41,36 +34,35 @@ class ProbeObject(Probe):
             contact_shape_params={"radius": 10},
         )
         probe.set_device_channel_indices(list(range(probe.get_contact_count())))
-        contacts = cls.from_Probe(probe)
-        return contacts
+        return cls.from_Probe(probe)
 
     @classmethod
     def from_json(cls, object: Path) -> "ProbeObject":
         with open(object, "r") as f:
             data = json.load(f)
-            contacts = []
-            for i in range(len(data["id"])):
-                contact_data = {
-                    "id": data["id"][i], 
-                    "x": data["x"][i], 
-                    "y": data["y"][i], 
+            contacts = [
+                Contact.from_dict({
+                    "id": data["id"][i],
+                    "x": data["x"][i],
+                    "y": data["y"][i],
                     "z": data["z"][i]
-                }
-                contacts.append(Contact.from_dict(contact_data))
-            return contacts
+                })
+                for i in range(len(data["id"]))
+            ]
+            return cls(contacts)
 
     @classmethod
     def from_dict(cls, data: dict) -> "ProbeObject":
-        contacts = []
-        for i in range(len(data["id"])):
-            contact_data = {
-                "id": data["id"][i], 
-                "x": data["x"][i], 
-                "y": data["y"][i], 
+        contacts = [
+            Contact.from_dict({
+                "id": data["id"][i],
+                "x": data["x"][i],
+                "y": data["y"][i],
                 "z": data["z"][i]
-            }
-            contacts.append(Contact.from_dict(contact_data))
-        return contacts
+            })
+            for i in range(len(data["id"]))
+        ]
+        return cls(contacts)
 
     @classmethod
     def from_Probe(cls, probe: Probe) -> "ProbeObject":
@@ -96,7 +88,8 @@ class ProbeObject(Probe):
                     "z": 0
                 }
             contacts.append(Contact.from_dict(contact_data))
-        return contacts
+        probe_object = ProbeObject(contacts)
+        return probe_object
 
     def get_contacts_num(self):
-        return len(self._contacts)
+        return len(self.contacts)

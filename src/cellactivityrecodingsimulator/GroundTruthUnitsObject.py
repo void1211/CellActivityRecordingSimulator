@@ -5,31 +5,24 @@ from pathlib import Path
 from typing import Union
 import json
 
-
-
 class GTUnitsObject:
 
-    def __init__(self, units: list[Unit]):
-        self._units = units
+    def __init__(self):
+        self.units = []
 
     def __str__(self):
-        return f"GTUnitss - {len(self._units)} units"
+        return f"GTUnits - {len(self.units)} units"
 
     def __repr__(self):
         return self.__str__()
 
-    @property
-    def units(self):
-        return self._units
-
-    @units.setter
-    def units(self, value):
-        self._units = value
+    def get_units(self):
+        return self.units
 
     @classmethod
     def generate(
         cls, 
-        settings:dict,
+        settings,
         num_column:int=1, 
         num_unit_per_column:int=16, 
         xpitch:float=0, 
@@ -38,43 +31,53 @@ class GTUnitsObject:
         x_shift:float=0, 
         id_major_order:str="column"
         ):
-        units = []
-        current_id = 0
+        """ユニットを生成する"""
+        # Settingsオブジェクトの場合は辞書に変換
+        if hasattr(settings, 'to_dict'):
+            settings = settings.to_dict()
         
+        gt_units = cls()
+        units_list = []
+        current_id = 0
         if id_major_order == "column":
             # 列優先: 各列を順番に処理
             for column in range(num_column):
-                for unit in range(num_unit_per_column):
-                    units.append(
-                        Unit.generate(
-                            settings=settings,
-                            id=current_id, 
-                            group=0, 
-                            x=xpitch * column + x_shift, 
-                            y=ypitch * unit + y_shift_per_column[column],
-                            z=0
-                        ))
+                for index in range(num_unit_per_column):
+                    unit = Unit.generate(
+                        id=current_id, 
+                        group=0, 
+                        x=xpitch * column + x_shift, 
+                        y=ypitch * index + y_shift_per_column[column],
+                        z=0
+                    )
+                    unit.set_templateObject(settings=settings)
+                    unit.set_spike_time(settings=settings)
+                    unit.set_amplitudes(settings=settings)
+                    units_list.append(unit)
                     current_id += 1
         elif id_major_order == "row":
             # 行優先: 各行を順番に処理
             max_units = num_unit_per_column if num_unit_per_column else 0
-            for unit in range(max_units):
+            for row in range(max_units):
                 for column in range(num_column):
-                    if unit < num_unit_per_column:
-                        units.append(
-                            Unit.generate(
-                                settings=settings,
-                                id=current_id, 
-                                group=0, 
-                                x=xpitch * column + x_shift, 
-                                y=ypitch * unit + y_shift_per_column[column],
-                                z=0
-                            ))
+                    if row < num_unit_per_column:
+                        unit = Unit.generate(
+                            id=current_id, 
+                            group=0, 
+                            x=xpitch * column + x_shift, 
+                            y=ypitch * row + y_shift_per_column[column],
+                            z=0
+                        )
+                        unit.set_templateObject(settings=settings)
+                        unit.set_spike_time(settings=settings)
+                        unit.set_amplitudes(settings=settings)
+                        units_list.append(unit)
                         current_id += 1
         else:
             raise ValueError(f"Invalid id_major_order: {id_major_order}")
 
-        return units
+        gt_units.units = units_list
+        return gt_units
 
     @classmethod
     def load(cls, object: Union[Path, "GTUnitsObject", dict, None], settings: dict) -> "GTUnitsObject":
@@ -99,7 +102,7 @@ class GTUnitsObject:
         if Path(object).stat().st_size == 0:
             raise ValueError(f"セルファイルが空です: {object}")
 
-        units = []
+        units_list = []
 
         if isinstance(object, dict):
             junits = object
@@ -114,22 +117,25 @@ class GTUnitsObject:
                 "y": junits["y"][i], 
                 "z": junits["z"][i]
             }
-            units.append(Unit.from_dict(unit_data)) 
-        return cls(units=units)
+            units_list.append(Unit.from_dict(unit_data)) 
+        units = cls()
+        units.units = units_list
+        return units
 
     def to_dict(self):
         dict_data = {
-            "units": [unit.to_dict() for unit in self._units]
+            "units": [unit.to_dict() for unit in self.units]
         }
         return dict_data
 
     @classmethod
     def from_dict(cls, data: dict):
-        units = [Unit.from_dict(unit) for unit in data["units"]]
-        return cls(units=units)
+        units = cls()
+        units.units = [Unit.from_dict(unit) for unit in data["units"]]
+        return units
 
     def get_units_num(self):
-        return len(self._units)
+        return len(self.units)
 
     def save_npz(self, filepath: str):
         data_dict = self.to_dict()
@@ -138,12 +144,13 @@ class GTUnitsObject:
     @classmethod
     def load_npz(cls, filepath: str):
         data_dict = np.load(filepath)
-        units = [Unit.from_dict(unit) for unit in data_dict["units"]]
-        return cls(units=units)
+        units = cls()
+        units.units = [Unit.from_dict(unit) for unit in data_dict["units"]]
+        return units
 
     def to_Sorting(self, sampling_frequency: float):
         units_dict = {}
-        for index, unit in enumerate(self._units):
+        for index, unit in enumerate(self.units):
             units_dict[index] = np.array(unit.spikeTimeList)
 
         gt_sorting = NumpySorting.from_unit_dict(
@@ -164,5 +171,5 @@ class GTUnitsObject:
             x_shift=0,
             id_major_order="column",
         )
-        return cls(units=units)
+        return units
 

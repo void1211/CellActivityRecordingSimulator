@@ -1,71 +1,36 @@
 from .BaseSignal import BaseSignal
 import numpy as np
-from .Unit import Unit
-from .Contact import Contact
 
 class RandomNoise(BaseSignal):
-    def __init__(self, settings: dict, signal: np.ndarray):
-        super().__init__(settings["baseSettings"]["fs"], settings["baseSettings"]["duration"])
-        self._noiseAmp = settings["noiseSettings"]["normal"]["amplitude"]
-        self._loc = settings["noiseSettings"]["normal"]["location"]
-        self._scale = settings["noiseSettings"]["normal"]["scale"]
-
-        self.signal = signal
+    def __init__(self):
+        self.signal = []
 
     def __repr__(self):
-        return f"RandomNoise(fs={self.fs}, duration={self.duration}, noiseAmp={self.noiseAmp})"
+        return f"RandomNoise: length={self.signal.shape[0]}"
 
     def __str__(self):
         return self.__repr__()
 
-    @property
-    def noiseAmp(self):
-        return self._noiseAmp
-    
-    @noiseAmp.setter
-    def noiseAmp(self, noiseAmp: float):
-        self._check_noiseAmp(noiseAmp)
-        self._noiseAmp = noiseAmp
-    
-    @property
-    def loc(self):
-        return self._loc
-    
-    @loc.setter
-    def loc(self, loc: float):
-        self._check_loc(loc)
-        self._loc = loc
-    
-    @property
-    def scale(self):
-        return self._scale
-    
-    @scale.setter
-    def scale(self, scale: float):
-        self._check_scale(scale)
-        self._scale = scale
-    
-    def _check_noiseAmp(self, noiseAmp: float):
-        assert noiseAmp > 0, "noiseAmp must be greater than 0"
-    
-    def _check_loc(self, loc: float):
-        assert loc >= 0, "loc must be greater than or equal to 0"
-    
-    def _check_scale(self, scale: float):
-        assert scale > 0, "scale must be greater than 0"
-
     @classmethod
-    def generate(cls, noiseType: str, settings: dict):
+    def generate(cls, noiseType: str, settings):
+        """ランダムノイズを生成する"""
+        # Settingsオブジェクトの場合は辞書に変換
+        if hasattr(settings, 'to_dict'):
+            settings = settings.to_dict()
+        
+        noise = cls()
         if noiseType == "normal":
-            return cls._normal_noise(settings)
+            noise.signal = cls._normal_noise(settings)
         elif noiseType == "gaussian":
-            return cls._gaussian_noise(settings)
+            noise.signal = cls._gaussian_noise(settings)
+        return noise
 
     def _normal_noise(cls, settings: dict):
         fs = settings["baseSettings"]["fs"]
         duration = settings["baseSettings"]["duration"]
         noiseAmp = settings["noiseSettings"]["normal"]["amplitude"]
-        return np.random.default_rng().integers(-noiseAmp, noiseAmp, size=int(duration * fs)).astype(np.float64)
+        signal = np.random.default_rng().integers(-noiseAmp, noiseAmp, size=int(duration * fs)).astype(np.float64)
+        return signal
 
     def _gaussian_noise(cls, settings: dict):
         fs = settings["baseSettings"]["fs"]
@@ -73,73 +38,56 @@ class RandomNoise(BaseSignal):
         noiseAmp = settings["noiseSettings"]["gaussian"]["amplitude"]
         loc = settings["noiseSettings"]["gaussian"]["location"]
         scale = settings["noiseSettings"]["gaussian"]["scale"]
-        return np.random.normal(loc, scale, size=int(duration * fs)).astype(np.float64) * noiseAmp
+        signal = np.random.normal(loc, scale, size=int(duration * fs)).astype(np.float64) * noiseAmp
+        return signal
 
+# class ModelNoise(BaseSignal):
+#     def __init__(self, settings: dict, units: list[Unit]):
+#         super().__init__(settings["baseSettings"]["fs"], settings["baseSettings"]["duration"])
+#         self._units = units
+#         # self.signal = generate(settings)
 
-class ModelNoise(BaseSignal):
-    def __init__(self, settings: dict, units: list[Unit]):
-        super().__init__(settings["baseSettings"]["fs"], settings["baseSettings"]["duration"])
-        self._units = units
-        # self.signal = generate(settings)
+#     def __repr__(self):
+#         return f"ModelNoise(fs={self.fs}, duration={self.duration})"
 
-    def __repr__(self):
-        return f"ModelNoise(fs={self.fs}, duration={self.duration})"
+#     def __str__(self):
+#         return self.__repr__()
 
-    def __str__(self):
-        return self.__repr__()
+#     @property
+#     def units(self):
+#         return self._units
 
-    @property
-    def units(self):
-        return self._units
+#     @units.setter
+#     def units(self, units: list[Unit]):
+#         self._units = units
 
-    @units.setter
-    def units(self, units: list[Unit]):
-        self._units = units
-
-    # def genearate(self, contacts: list[Contact], margin: float, density: float, inviolableArea: float):
-    #     self._units = make_noise_units(self.duration, self.fs, contacts, margin, density, inviolableArea)
+#     # def genearate(self, contacts: list[Contact], margin: float, density: float, inviolableArea: float):
+#     #     self._units = make_noise_units(self.duration, self.fs, contacts, margin, density, inviolableArea)
 
 class DriftNoise(BaseSignal):
-    def __init__(self, settings: dict):
-        super().__init__(settings["baseSettings"]["fs"], settings["baseSettings"]["duration"])
+    def __init__(self):
 
-        self.signal = self.generate(settings)
+        self.signal = []
     def __repr__(self):
-        return f"DriftNoise(fs={self.fs}, duration={self.duration})"
+        return f"DriftNoise: length={self.signal.shape[0]}"
 
     def __str__(self):
         return self.__repr__()
 
-    @property
-    def driftType(self):
-        return self._driftType
-
-    @driftType.setter
-    def driftType(self, driftType: str):
-        self._driftType = driftType
-
-    @property
-    def driftAmplitude(self):
-        return self._driftAmplitude
-
-    @driftAmplitude.setter
-    def driftAmplitude(self, driftAmplitude: float):
-        self._driftAmplitude = driftAmplitude
-
-    @property
-    def driftFrequency(self):
-        return self._driftFrequency
-
-    @driftFrequency.setter
-    def driftFrequency(self, driftFrequency: float):
-        self._driftFrequency = driftFrequency
-
     @classmethod
-    def generate(cls, settings: dict):
+    def generate(cls, settings):
         """ドリフト信号をシミュレートする"""
+        # Settingsオブジェクトの場合は辞書に変換
+        if hasattr(settings, 'to_dict'):
+            settings = settings.to_dict()
         
+        noise = cls()
         signal_length = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
         
+        if settings["driftSettings"]["enable"] == False:
+            noise.signal = np.zeros(signal_length)
+            return noise
+
         if settings["driftSettings"]["driftType"] == "linear":
             # 線形ドリフト（時間とともに直線的に変化）
             t = np.linspace(0, settings["baseSettings"]["duration"], signal_length)
@@ -181,50 +129,33 @@ class DriftNoise(BaseSignal):
         else:
             raise ValueError(f"Unknown drift type")
         
-        return drift.astype(np.float64)
+        noise.signal = drift.astype(np.float64)
+        return noise
 
 class PowerLineNoise(BaseSignal):
-    def __init__(self, settings: dict):
-        super().__init__(settings["baseSettings"]["fs"], settings["baseSettings"]["duration"])
-
-        self.signal = self.generate(settings)
+    def __init__(self):
+        self.signal = []
 
     def __repr__(self):
-        return f"PowerLineNoise(fs={self.fs}, duration={self.duration})"
+        return f"PowerLineNoise: length={self.signal.shape[0]}"
 
     def __str__(self):
         return self.__repr__()
 
-    @property
-    def powerLineFrequency(self):
-        return self._powerLineFrequency
-
-    @powerLineFrequency.setter
-    def powerLineFrequency(self, powerLineFrequency: float):
-        self._powerLineFrequency = powerLineFrequency
-
-    @property
-    def powerLineAmplitude(self):
-        return self._powerLineAmplitude
-
-    @powerLineAmplitude.setter
-    def powerLineAmplitude(self, powerLineAmplitude: float):
-        self._powerLineAmplitude = powerLineAmplitude
-
     @classmethod
-    def generate(cls, settings: dict):
-        """
-        電源ノイズ(50Hz/60Hz)をシミュレートする
+    def generate(cls, settings):
+        """電源ノイズ(50Hz/60Hz)をシミュレートする"""
+        # Settingsオブジェクトの場合は辞書に変換
+        if hasattr(settings, 'to_dict'):
+            settings = settings.to_dict()
         
-        Args:
-            settings: シミュレーション設定
-            powerLineFreq: 電源周波数(Hz, デフォルト50Hz)
-        
-        Returns:
-            np.ndarray: 電源ノイズ信号
-        """
+        noise = cls()
         signal_length = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
         
+        if settings["powerNoiseSettings"]["enable"] == False:
+            noise.signal = np.zeros(signal_length)
+            return noise
+
         # 時間軸
         t = np.linspace(0, settings["baseSettings"]["duration"], signal_length)
         
@@ -246,4 +177,5 @@ class PowerLineNoise(BaseSignal):
         # 基本ノイズと位相ノイズを組み合わせ
         final_power_noise = 0.7 * power_noise + 0.3 * power_noise_with_phase
         
-        return final_power_noise.astype(np.float64)
+        noise.signal = final_power_noise.astype(np.float64)
+        return noise

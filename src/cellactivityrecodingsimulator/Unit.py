@@ -1,103 +1,65 @@
 from .BaseObject import BaseObject
 import numpy as np
-from typing import Optional, List
+from typing import List
 from .Template import BaseTemplate
 
 class Unit(BaseObject):
-    def __init__(self, id: int = 0, group: int = 0, x: Optional[float] = None, y: Optional[float] = None, z: Optional[float] = None):
-        """
-        Unitオブジェクトを初期化します。
-
-        Args:
-            id (int): セルのユニークID
-            group (int): セルのグループID
-            x, y, z: セルの座標
-        """
-        # 親クラスの__init__を呼び出し
-        if all(arg is not None for arg in [x, y, z]):
-            super().__init__(x=x, y=y, z=z)
-        else:
-            super().__init__()
+    def __init__(self):
         
         # セッターを使ってバリデーションを適用
-        self.id = id
-        self.group = group
+        self.id = 0
+        self.group = 0
 
-        self._spikeTimeList = []
-        self._spikeAmpList = []
-        self._spikeTemp = []
+        self.spikeTimeList = []
+        self.spikeAmpList = []
+        self.templateObject = BaseTemplate()
 
     def __str__(self):
-        return f"Unit(id={self.id}, x={self.x}, y={self.y}, z={self.z}, group={self.group})"
+        return f"Unit{self.id}({self.group}), [{self.x},{self.y},{self.z}]"
 
     def __repr__(self):
         return self.__str__()
 
-    @property
-    def group(self):
-        return self._group
+    def set_spike_time(self, spike_time: List[int]=None, settings=None):
+        """スパイク時間を設定する"""
+        if spike_time is not None:
+            self.spikeTimeList = spike_time
+        else:
+            # Settingsオブジェクトの場合は辞書に変換
+            if hasattr(settings, 'to_dict'):
+                settings = settings.to_dict()
+            self.spikeTimeList = self._make_spike_time(settings)
 
-    @group.setter
-    def group(self, value):
-        self._check_group(value)
-        self._group = value
+    def set_amplitudes(self, amplitude: List[float]=None, settings=None):
+        """スパイク振幅を設定する"""
+        if amplitude is not None:
+            self.spikeAmpList = amplitude
+        else:
+            # Settingsオブジェクトの場合は辞書に変換
+            if hasattr(settings, 'to_dict'):
+                settings = settings.to_dict()
+            self.spikeAmpList = [self._choice_spike_amplitude(settings) for _ in self.spikeTimeList]
 
-    @property
-    def id(self):
-        return self._id
+    def get_templateObject(self) -> BaseTemplate:
+        """テンプレートオブジェクトを取得する"""
+        return self.templateObject
 
-    @id.setter
-    def id(self, value):
-        self._check_id(value)
-        self._id = value
-    
-    @property
-    def spikeTimeList(self):
-        """スパイク時間リストを取得"""
-        return self._spikeTimeList
-    
-    @spikeTimeList.setter
-    def spikeTimeList(self, value):
-        """スパイク時間リストを設定"""
-        self._spikeTimeList = value
-    
-    @property
-    def spikeAmpList(self):
-        """スパイク振幅リストを取得"""
-        return self._spikeAmpList
-    
-    @spikeAmpList.setter
-    def spikeAmpList(self, value):
-        """スパイク振幅リストを設定"""
-        self._spikeAmpList = value
-    
-    @property
-    def spikeTemp(self):
-        """スパイクテンプレートを取得"""
-        return self._spikeTemp
-    
-    @spikeTemp.setter
-    def spikeTemp(self, value):
-        """スパイクテンプレートを設定"""
-        self._spikeTemp = value
-        
-    def _check_id(self, value):
-        if not isinstance(value, int):
-            raise TypeError("idは整数である必要があります")
+    def set_templateObject(self, template: BaseTemplate=None, settings=None):
+        """テンプレートオブジェクトを設定する"""
+        if template is not None:
+            self.templateObject = template
+        else:
+            self.templateObject = BaseTemplate.generate(settings)
 
-    def _check_group(self, value):
-        if not isinstance(value, int):
-            raise TypeError("groupは整数である必要があります")
     @classmethod
-    def generate(cls, settings: dict, id: int, group: int, x: float, y: float, z: float) -> 'Unit':
+    def generate(cls, id: int, group: int, x: float, y: float, z: float) -> 'Unit':
         """設定に基づいてユニットを生成する"""
-        unit = cls(id=id, group=group, x=x, y=y, z=z)
-        unit.spikeTimeList = cls._make_spike_time(settings)
-        unit.spikeAmpList = [cls._choice_spike_amplitude(settings) for _ in unit.spikeTimeList]
-        
-        if settings["spikeSettings"]["spikeType"] in ["gabor", "exponential"]:
-            unit.spikeTemp = BaseTemplate.generate(settings)
-        
+        unit = cls()
+        unit.id = id
+        unit.group = group
+        unit.x = x
+        unit.y = y
+        unit.z = z
         return unit
 
     @classmethod
@@ -138,7 +100,7 @@ class Unit(BaseObject):
             "position": [self.x, self.y, self.z],
             "spikeTime": self.spikeTimeList,
             "amplitude": self.spikeAmpList,
-            "template": self.spikeTemp.template,
+            "template": self.templateObject.get_template(),
         }
 
     @classmethod
@@ -147,22 +109,30 @@ class Unit(BaseObject):
         from .Template import GaborTemplate
         
         # 座標の取得（positionまたは個別のx,y,z）
-        pos = data.get("position", [0, 0, 0])
-        unit = cls(
+        if "position" in data:
+            pos = data["position"]
+            x, y, z = pos[0], pos[1], pos[2]
+        else:
+            x = data.get("x", 0)
+            y = data.get("y", 0)
+            z = data.get("z", 0)
+        
+        unit = cls.generate(
             id=data.get("id", 0),
             group=data.get("group", 0),
-            x=pos[0] if "position" in data else data.get("x", 0),
-            y=pos[1] if "position" in data else data.get("y", 0),
-            z=pos[2] if "position" in data else data.get("z", 0),
+            x=x,
+            y=y,
+            z=z
         )
-        
+
         # スパイク情報を設定
         unit.spikeTimeList = data.get("spikeTime", [])
         unit.spikeAmpList = data.get("amplitude", [])
         
         # テンプレートを設定
-        template_data = data.get("template", [])
-        template_array = np.array(template_data) if len(template_data) > 0 else np.array([0.0])
-        unit.spikeTemp = GaborTemplate(template=template_array)
+        if "template" in data and len(data["template"]) > 0:
+            unit.templateObject = BaseTemplate().set_template(list(data["template"]))
+        else:
+            unit.templateObject = BaseTemplate().set_template(np.array([0.0]))
         
         return unit

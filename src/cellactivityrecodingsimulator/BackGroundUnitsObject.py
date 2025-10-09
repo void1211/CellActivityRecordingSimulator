@@ -1,4 +1,5 @@
 from .Unit import Unit
+from .ProbeObject import ProbeObject
 from .Contact import Contact
 from .calculate import calculate_scaled_spike_amplitude, calculate_distance_two_objects
 
@@ -7,36 +8,25 @@ import logging
 from tqdm import tqdm
 
 class BGUnitsObject:
-    def __init__(self, units: list[Unit]):
-
-        self._units = units
+    def __init__(self):
+        self.units = []
 
     def __str__(self):
-        return f"BGUnitsObject(units={self._units})"
+        return f"BGUnitsObject - {len(self.units)} units"
 
     def __repr__(self):
         return self.__str__()
 
-    @property
-    def units(self):
-        return self._units
-
-    @units.setter
-    def units(self, value):
-        self._units = value
-
     @classmethod
-    def generate(cls, settings: dict, contacts: list[Contact]):
-        """
-        3次元空間上に背景活動を生成する細胞を配置する
+    def generate(cls, settings, probe: ProbeObject) -> "BGUnitsObject":
+        """3次元空間上に背景活動を生成する細胞を配置する"""
+        # Settingsオブジェクトの場合は辞書に変換
+        if hasattr(settings, 'to_dict'):
+            settings = settings.to_dict()
         
-        Args:
-            settings: シミュレーション設定
-            contacts: 記録サイトのリスト
-        Returns:
-            list[Unit]: 生成された背景活動細胞のリスト
-        """
+        bg_units = cls()
         modelSettings = settings["noiseSettings"]["model"]
+        contacts = probe.contacts
         # 記録サイトの範囲を計算
         contact_x_coords = [contact.x for contact in contacts]
         contact_y_coords = [contact.y for contact in contacts]
@@ -58,7 +48,7 @@ class BGUnitsObject:
         unit_count = int(modelSettings["density"] * volume_mm3)
         
         # 細胞をランダムに配置
-        bg_units = []
+        bg_units_list = []
         attempts = 0
         max_attempts = 1000  # 無限ループ防止
         
@@ -89,44 +79,42 @@ class BGUnitsObject:
             
             # 細胞を生成
             unit = Unit.generate(
-                settings=settings,
                 group=0,
                 id=i,
                 x=x,
                 y=y,
                 z=z
             )
-            bg_units.append(unit)
+            unit.set_templateObject(settings=settings)
+            unit.set_spike_time(settings=settings)
+            unit.set_amplitudes(settings=settings)
+            bg_units_list.append(unit)
 
-        return cls(units=bg_units)
+        bg_units.units = bg_units_list
+        return bg_units
 
-    def make_background_activity(self, contact: Contact, attenTime: float, settings: dict) -> list[float]:
-        """
-        ノイズ細胞の活動を記録サイトの信号に追加する
+    def make_background_activity(self, contact: Contact, attenTime: float, settings) -> Contact:
+        """ノイズ細胞の活動を記録サイトの信号に追加する"""
+        # Settingsオブジェクトの場合は辞書に変換
+        if hasattr(settings, 'to_dict'):
+            settings = settings.to_dict()
         
-        Args:
-            contact: 記録サイト
-            attenTime: 減衰時間
-        """
-        if not self.units:
-            logging.warning("ノイズ細胞が存在しません")
-            return
-        duration = settings["baseSettings"]["duration"]
-        fs = settings["baseSettings"]["fs"]
-        # サイトの信号をnumpy配列に変換
-        contact_signal = np.zeros(int(duration * fs))
+        # 信号を初期化
+        duration_samples = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
+        contact_signal = np.zeros(duration_samples)
         
         added_spikes = 0
         logging.info(f"=== ノイズ細胞活動追加 ===")
         for unit_idx, unit in tqdm(enumerate(self.units), desc="ノイズ細胞活動追加中", total=len(self.units), leave=False):
             # 各細胞からの信号を計算
+            distance = calculate_distance_two_objects(unit, contact)
             scaled_amps = calculate_scaled_spike_amplitude(
                 unit.spikeAmpList, 
-                calculate_distance_two_objects(unit, contact), 
+                distance, 
                 attenTime
                 )
             
-            template = unit.spikeTemp.template 
+            template = unit.templateObject.get_template() 
             
             # テンプレートが空または無効な場合はスキップ
             if len(template) == 0:
@@ -162,14 +150,17 @@ class BGUnitsObject:
                     distance = calculate_distance_two_objects(unit, contact)
                     logging.debug(f"  細胞{unit_idx}: 距離={distance:.2f}μm, 追加スパイク数={unit_added_spikes}")
         
-        return contact_signal.tolist()
+        contact.set_signal("background", contact_signal)
+        return contact
 
     def to_dict(self):
         return {
-            "units": [unit.to_dict() for unit in self._units]
+            "units": [unit.to_dict() for unit in self.units]
         }
 
     @classmethod
     def from_dict(cls, data: dict):
         units = [Unit.from_dict(unit) for unit in data["units"]]
-        return cls(units=units)
+        bg_units = cls()
+        bg_units.units = units
+        return bg_units

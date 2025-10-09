@@ -1,12 +1,10 @@
-# from pydantic import BaseModel, field_validator
 from pathlib import Path
-import json
-import logging
 from typing import Union
 from .BaseSettings import BaseSettings
-from .carsIO import load_settings_from_json
 import random
 import numpy as np
+import json
+import logging
 
 class Settings(BaseSettings):
     def __init__(self, data: dict=None):
@@ -59,25 +57,29 @@ class Settings(BaseSettings):
         if object is None:
             return cls(default_settings())
         elif isinstance(object, Path):
-            return load_settings_from_json(object)
+            return cls.load_from_json(object)
         elif isinstance(object, Settings):
             return object
         elif isinstance(object, dict):
             return cls.from_dict(object)
         else:
             raise ValueError(f"Invalid object: {object}")
+
+    @classmethod
+    def load_from_json(cls, path: Path) -> "Settings":
+        with open(path, "r") as f:
+            data = json.load(f)
+        if "baseSettings" not in data:
+            try:
+                data = convert_legacySettings(data)
+            except Exception:
+                logging.warning(f"convert legacySettings error. use default settings.")
+                data = default_settings()
+        return cls.from_dict(data)
         
     @classmethod
     def from_dict(cls, data: dict) -> "Settings":
-        data_dict = {
-            "baseSettings": safe_get(data, "baseSettings"),
-            "spikeSettings": safe_get(data, "spikeSettings"),
-            "noiseSettings": safe_get(data, "noiseSettings"),
-            "driftSettings": safe_get(data, "driftSettings"),
-            "powerNoiseSettings": safe_get(data, "powerNoiseSettings"),
-            "templateSimilarityControlSettings": safe_get(data, "templateSimilarityControlSettings"),
-        }
-        return cls(data_dict)
+        return cls(data)
         
 
     def to_dict(self) -> dict:
@@ -104,24 +106,17 @@ class RootSettings(BaseSettings):
         errors = []
         if self.name is None:
             errors.append("name error.")
-        if self.fs <= 0:
+        if self.fs is None or self.fs <= 0:
             errors.append("fs error.")
-        if self.duration <= 0:
+        if self.duration is None or self.duration <= 0:
             errors.append("duration error.")
-        if not isinstance(self.random_seed, int):
+        if self.random_seed is not None and not isinstance(self.random_seed, int):
             errors.append("random_seed error.")
         return errors
 
     @classmethod
     def from_dict(cls, data: dict) -> "RootSettings":
-        data_dict = {
-            "name": safe_get(data, "name"),
-            "pathSaveDir": safe_get(data, "pathSaveDir"),
-            "fs": safe_get(data, "fs"),
-            "duration": safe_get(data, "duration"),
-            "random_seed": safe_get(data, "random_seed"),
-        }
-        return cls(data_dict)
+        return cls(data)
     
     def to_dict(self) -> dict:
         return {
@@ -247,14 +242,7 @@ class GaborSettings(BaseSettings):
 
     @classmethod
     def from_dict(cls, data: dict) -> "GaborSettings":
-        data_dict = {
-            "randType": safe_get(data, "randType"),
-            "sigma": safe_get(data, "sigma"),
-            "f0": safe_get(data, "f0"),
-            "theta": safe_get(data, "theta"),
-            "width": safe_get(data, "width"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -322,18 +310,7 @@ class ExponentialSpikeSettings(BaseSettings):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExponentialSpikeSettings":
-        data_dict = {
-            "randType": safe_get(data, "randType"),
-            "ms_before": safe_get(data, "ms_before"),
-            "ms_after": safe_get(data, "ms_after"),
-            "negative_amplitude": safe_get(data, "negative_amplitude"),
-            "positive_amplitude": safe_get(data, "positive_amplitude"),
-            "depolarization_ms": safe_get(data, "depolarization_ms"),
-            "repolarization_ms": safe_get(data, "repolarization_ms"),
-            "recovery_ms": safe_get(data, "recovery_ms"),
-            "smooth_ms": safe_get(data, "smooth_ms"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -363,10 +340,7 @@ class TemplateSettings(BaseSettings):
 
     @classmethod
     def from_dict(cls, data: dict) -> "TemplateSettings":
-        data_dict = {
-            "pathSpikeList": safe_get(data, "pathSpikeList"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -388,10 +362,7 @@ class TruthSpikeSettings(BaseSettings):
     
     @classmethod
     def from_dict(cls, data: dict) -> "TruthSpikeSettings":
-        data_dict = {
-            "pathSpikeList": safe_get(data, "pathSpikeList"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -417,14 +388,7 @@ class NoiseSettings(BaseSettings):
     
     @classmethod
     def from_dict(cls, data: dict) -> "NoiseSettings":
-        data_dict = {
-            "noiseType": safe_get(data, "noiseType"),
-            "model": ModelSettings.from_dict(safe_get(data, "model")),
-            "normal": NormalSettings.from_dict(safe_get(data, "normal")),
-            "gaussian": GaussianSettings.from_dict(safe_get(data, "gaussian")),
-            "truth": TruthNoiseSettings.from_dict(safe_get(data, "truth")),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -446,10 +410,7 @@ class NormalSettings(BaseSettings):
         return errors
     @classmethod
     def from_dict(cls, data: dict) -> "NormalSettings":
-        data_dict = {
-            "amplitude": safe_get(data, "amplitude"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -475,12 +436,7 @@ class GaussianSettings(BaseSettings):
 
     @classmethod
     def from_dict(cls, data: dict) -> "GaussianSettings":
-        data_dict = {
-            "amplitude": safe_get(data, "amplitude"),
-            "location": safe_get(data, "location"),
-            "scale": safe_get(data, "scale"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -506,11 +462,7 @@ class TruthNoiseSettings(BaseSettings):
 
     @classmethod
     def from_dict(cls, data: dict) -> "TruthNoiseSettings":
-        data_dict = {
-            "pathNoise": safe_get(data, "pathNoise"),
-            "pathContacts": safe_get(data, "pathContacts"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -538,12 +490,7 @@ class ModelSettings(BaseSettings):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ModelSettings":
-        data_dict = {
-            "density": safe_get(data, "density"),
-            "margin": safe_get(data, "margin"),
-            "inviolableArea": safe_get(data, "inviolableArea"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -614,11 +561,7 @@ class RandomWalkSettings(BaseSettings):
 
     @classmethod
     def from_dict(cls, data: dict) -> "RandomWalkSettings":
-        data_dict = {
-            "amplitude": safe_get(data, "amplitude"),
-            "frequency": safe_get(data, "frequency"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -643,11 +586,7 @@ class StepSettings(BaseSettings):
 
     @classmethod
     def from_dict(cls, data: dict) -> "StepSettings":
-        data_dict = {
-            "amplitude": safe_get(data, "amplitude"),
-            "frequency": safe_get(data, "frequency"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -671,11 +610,7 @@ class OscillatorySettings(BaseSettings):
 
     @classmethod
     def from_dict(cls, data: dict) -> "OscillatorySettings":
-        data_dict = {
-            "amplitude": safe_get(data, "amplitude"),
-            "frequency": safe_get(data, "frequency"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -698,11 +633,7 @@ class ExponentialDriftSettings(BaseSettings):
 
     @classmethod
     def from_dict(cls, data: dict) -> "ExponentialDriftSettings":
-        data_dict = {
-            "amplitude": safe_get(data, "amplitude"),
-            "frequency": safe_get(data, "frequency"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -719,20 +650,15 @@ class PowerNoiseSettings(BaseSettings):
         self.amplitude = safe_get(data, "amplitude")
     def validate(self) -> list[str]:
         errors = []
-        if self.enable and self.frequency <= 0:
+        if self.enable and (self.frequency is None or self.frequency <= 0):
             errors.append("frequency error.")
-        if self.amplitude <= 0:
+        if self.amplitude is not None and self.amplitude <= 0:
             errors.append("amplitude error.")
         return errors
 
     @classmethod
     def from_dict(cls, data: dict) -> "PowerNoiseSettings":
-        data_dict = {
-            "enable": safe_get(data, "enable"),
-            "frequency": safe_get(data, "frequency"),
-            "amplitude": safe_get(data, "amplitude"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -751,21 +677,16 @@ class TemplateSimilarityControlSettings(BaseSettings):
         self.similarity_control_attempts = safe_get(data, "similarity_control_attempts")
     def validate(self) -> list[str]:
         errors = []
-        if self.enable and self.min_cosine_similarity >= self.max_cosine_similarity:
-            errors.append("min_cosine_similarity must be less than max_cosine_similarity")
-        if self.similarity_control_attempts <= 0:
+        if self.enable and self.min_cosine_similarity is not None and self.max_cosine_similarity is not None:
+            if self.min_cosine_similarity >= self.max_cosine_similarity:
+                errors.append("min_cosine_similarity must be less than max_cosine_similarity")
+        if self.similarity_control_attempts is not None and self.similarity_control_attempts <= 0:
             errors.append("similarity_control_attempts must be positive")
         return errors
 
     @classmethod
     def from_dict(cls, data: dict) -> "TemplateSimilarityControlSettings":
-        data_dict = {
-            "enable": safe_get(data, "enable"),
-            "min_cosine_similarity": safe_get(data, "min_cosine_similarity"),
-            "max_cosine_similarity": safe_get(data, "max_cosine_similarity"),
-            "similarity_control_attempts": safe_get(data, "similarity_control_attempts"),
-        }
-        return cls(data_dict)
+        return cls(data)
 
     def to_dict(self) -> dict:
         data_dict = {
@@ -874,10 +795,15 @@ def default_settings() -> dict:
     return default_settings
 
 def safe_get(data: dict, key: str, default: any=None) -> any:
-    try:
-        return data[key]
-    except (KeyError, TypeError):
-        return default if default is not None else None
+    """辞書から安全に値を取得する。キーが存在しない場合はdefaultを返す"""
+    if data is None:
+        return default
+    
+    value = data.get(key, default)
+    if value is None:
+        return default
+    
+    return value
 
 def convert_legacySettings(legacySettings: dict) -> dict:
     """レガシーな設定を新しい設定に変換する"""

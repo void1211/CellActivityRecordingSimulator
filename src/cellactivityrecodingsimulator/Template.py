@@ -10,16 +10,16 @@ from .calculate import calculate_cosine_similarity
 # テンプレートクラスのマッピング（後で設定）
 TEMPLATE_CLASSES: Dict[str, Type['BaseTemplate']] = {}
 class BaseTemplate:
-    def __init__(self, template: np.ndarray):
-        self._template = template
+    def __init__(self):
+        self.template = []
 
-    @property
-    def template(self) -> np.ndarray:
-        return self._template
-    
-    @template.setter
-    def template(self, template: np.ndarray):
-        self._template = template
+    def get_template(self) -> np.ndarray:
+        """テンプレートを取得する"""
+        return self.template
+
+    def set_template(self, template: np.ndarray):
+        """テンプレートを設定する"""
+        self.template = template
 
     @staticmethod
     def _choose_value(settings: dict, parameter_name:str):
@@ -41,21 +41,21 @@ class BaseTemplate:
             raise ValueError(f"Invalid randType")
 
     @classmethod
-    def generate(cls, settings: dict) -> np.ndarray:
+    def generate(cls, settings) -> "GaborTemplate" or "ExponentialTemplate":
         """
         設定に基づいて適切なテンプレートクラスを選択してテンプレートを生成する
         
         Args:
-            settings: シミュレーション設定
+            settings: シミュレーション設定（dictまたはSettingsオブジェクト）
         
         Returns:
-            np.ndarray: 生成されたテンプレート
+            GaborTemplate or ExponentialTemplate: 生成されたテンプレート
         """
+        # Settingsオブジェクトの場合は辞書に変換
+        if hasattr(settings, 'to_dict'):
+            settings = settings.to_dict()
+        
         spike_type = settings["spikeSettings"]["spikeType"]
-        
-        if spike_type not in TEMPLATE_CLASSES:
-            raise ValueError(f"Invalid spikeType: {spike_type}. Supported types: {list(TEMPLATE_CLASSES.keys())}")
-        
         return TEMPLATE_CLASSES[spike_type].generate(settings)
 
     def generate_similar_template(self, settings: dict) -> 'BaseTemplate':
@@ -72,15 +72,15 @@ class BaseTemplate:
 
         for _ in range(sim_settings["similarity_control_attempts"]):
             new_template_obj = self.generate(settings)
-            new_template = new_template_obj.template
+            new_template = new_template_obj.get_template()
             
             # 通常のテンプレートをチェック
-            if is_in_range(calculate_cosine_similarity(self.template, new_template)):
+            if is_in_range(calculate_cosine_similarity(self.get_template(), new_template)):
                 return new_template_obj
             
             # 反転テンプレートをチェック
             inverted_template = -1.0 * new_template
-            if is_in_range(calculate_cosine_similarity(self.template, inverted_template)):
+            if is_in_range(calculate_cosine_similarity(self.get_template(), inverted_template)):
                 return create_template_from_array(inverted_template)
             
         
@@ -92,7 +92,7 @@ class BaseTemplate:
         
         for _ in range(10):
             new_template_obj = self.generate(settings)
-            similarity = calculate_cosine_similarity(self.template, new_template_obj.template)
+            similarity = calculate_cosine_similarity(self.get_template(), new_template_obj.get_template())
             distance = abs(similarity - target_similarity)
             
             if distance < best_distance:
@@ -107,16 +107,17 @@ class BaseTemplate:
             data = json.load(f)
         
         return [
-            GaborTemplate(template=np.array(data["spikeTemplate"][i])) 
+            BaseTemplate(template=np.array(data["spikeTemplate"][i])) 
             for i in range(len(data["id"]))
         ]
 
 class GaborTemplate(BaseTemplate):
-    def __init__(self, template: np.ndarray):
-        super().__init__(template=template)
+    def __init__(self):
+        super().__init__()
+        self.template = []
 
     @classmethod
-    def generate(cls, settings: dict) -> np.ndarray: 
+    def generate(cls, settings: dict) -> "GaborTemplate": 
         gaborSettings = settings["spikeSettings"]["gabor"]
         fs = settings["baseSettings"]["fs"]
         width = gaborSettings["width"]
@@ -130,14 +131,17 @@ class GaborTemplate(BaseTemplate):
 
         template = np.exp(-x**2 / (2 * sigma_sec**2)) * np.cos(2 * np.pi * f0 * x + gabortheta_rad)
         template = template / np.max(np.abs(template))
-        return GaborTemplate(template=template)
+        gaborTemplate = GaborTemplate()
+        gaborTemplate.set_template(template)
+        return gaborTemplate
 
 class ExponentialTemplate(BaseTemplate):
-    def __init__(self, template: np.ndarray):
-        super().__init__(template=template)
+    def __init__(self):
+        super().__init__()
+        self.template = []
 
     @classmethod
-    def generate(cls, settings: dict) -> np.ndarray:
+    def generate(cls, settings: dict) -> "ExponentialTemplate":
         exponentialSettings = settings["spikeSettings"]["exponential"]
         fs = settings["baseSettings"]["fs"]
         ms_before = BaseTemplate._choose_value(settings=exponentialSettings, parameter_name="ms_before")
@@ -148,6 +152,7 @@ class ExponentialTemplate(BaseTemplate):
         repolarization_ms = BaseTemplate._choose_value(settings=exponentialSettings, parameter_name="repolarization_ms")
         recovery_ms = BaseTemplate._choose_value(settings=exponentialSettings, parameter_name="recovery_ms")
         smooth_ms = BaseTemplate._choose_value(settings=exponentialSettings, parameter_name="smooth_ms")
+        
         template = generate_single_fake_waveform(
         sampling_frequency=fs,
         ms_before=ms_before,
@@ -160,7 +165,9 @@ class ExponentialTemplate(BaseTemplate):
         smooth_ms=smooth_ms)    
         # ピークを絶対値１に調整
         template = template / np.max(np.abs(template))
-        return ExponentialTemplate(template=template)
+        exponentialTemplate = ExponentialTemplate()
+        exponentialTemplate.set_template(template)
+        return exponentialTemplate
 
 # テンプレートクラスを登録
 TEMPLATE_CLASSES["gabor"] = GaborTemplate

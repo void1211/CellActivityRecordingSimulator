@@ -95,7 +95,7 @@ def plot_templates(units, condition_name, ids='all'):
     for i, unit in enumerate(units):
         # matplotlibのサブプロット番号は1から始まる必要があるため、i+1を使用
         ax = fig.add_subplot(len(units) // 2, 2, i + 1)
-        ax.plot(unit.spikeTemp.template)
+        ax.plot(unit.get_templateObject().get_template())
         ax.set_title(f'Template - {condition_name} (Unit ID: {unit.id})')
     fig.tight_layout()
     return fig
