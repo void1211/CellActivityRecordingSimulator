@@ -3,61 +3,82 @@ import numpy as np
 import json
 from pathlib import Path
 from .Settings import Settings
-from .Unit import Unit
-from .Contact import Contact
+from .Cell import Cell
+from .Site import Site
 from spikeinterface.core import NumpyRecording
-from probeinterface import Probe
+from tqdm import tqdm
 
 
 class CarsObject:
     def __init__(
     self, 
     settings: Settings=None, 
-    units: List[Unit]=None, 
-    contacts: List[Contact]=None,
-    noise_units: List[Unit]=None,
-    probe: Probe=None,
+    cells: List[Cell]=None, 
+    sites: List[Site]=None,
+    noise_cells: List[Cell]=None,
     ):
-        self.settings = settings
-        self.units = units
-        self.contacts = contacts
-        self.noise_units = noise_units
-
-        # TODO: ProbeObjectを使用した保存
-        # self.probe = probe
+        self._settings = settings
+        self._cells = cells
+        self._sites = sites
+        self._noise_cells = noise_cells
 
     def __str__(self):
-        if self.noise_units is None:
-            return f"{len(self.units)} units - {len(self.contacts)} ch - no noise units"
+        if self._noise_cells is None:
+            return f"{len(self._cells)} units - {len(self._sites)} ch - no noise units"
         else:
-            return f"{len(self.units)} units - {len(self.contacts)} ch - using noise units"
+            return f"{len(self._cells)} units - {len(self._sites)} ch - using noise units"
     
     def __repr__(self):
         return self.__str__()
 
+    @property
+    def settings(self):
+        return self._settings
+
+    @property
+    def cells(self):
+        return self._cells
+
+    @property
+    def sites(self):
+        return self._sites
+
+    @property
+    def noise_cells(self):
+        return self._noise_cells
+
     def to_dict(self):
         return {
-            "settings": self.settings.to_dict() if hasattr(self.settings, 'to_dict') else self.settings,
-            "units": [unit.to_dict() for unit in self.units],
-            "contacts": [contact.to_dict() for contact in self.contacts],
-            "noise_units": [noise_unit.to_dict() for noise_unit in self.noise_units] if self.noise_units else [],
-            # "probe": self.probe.to_dict() if self.probe else None,
+            "settings": self._settings.to_dict(),
+            "cells": [cell.to_dict() for cell in self._cells],
+            "sites": [site.to_dict() for site in self._sites],
+            "noise_cells": [noise_cell.to_dict() for noise_cell in self._noise_cells],
             }
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "CarsObject":
-        settings = Settings.from_dict(data["settings"])
-        units = [Unit.from_dict(unit) for unit in data["units"]]
-        contacts = [Contact.from_dict(contact) for contact in data["contacts"]]
-        noise_units = [Unit.from_dict(noise_unit) for noise_unit in data["noise_units"]]
-        # probe = Probe.from_dict(data["probe"]) if data["probe"] else None
-        return cls(
-            settings=settings,
-            units=units,
-            contacts=contacts,
-            noise_units=noise_units,
-            # probe=probe,
-        )
+    def from_dict(self, data: dict) -> "CarsObject":
+        self._settings = Settings.from_dict(data["settings"])
+        self._cells = [Cell.from_dict(cell) for cell in data["cells"]]
+        self._sites = [Site.from_dict(site) for site in data["sites"]]
+        self._noise_cells = [Cell.from_dict(noise_cell) for noise_cell in data["noise_cells"]]
+        return self
+
+    def get_NumpyRecording(self, t_starts: List[float]=[0]) -> NumpyRecording:
+        """
+        t_starts: List[float]
+        """
+        traces = []
+        channel_ids = []
+        for site in self._sites:
+            traces.append(site.get_signal("raw"))
+            channel_ids.append(site.id)
+        traces = np.array(traces).T
+        recording = NumpyRecording(
+            traces,
+            self._settings.to_dict()["baseSettings"]["fs"],
+            t_starts=t_starts,
+            channel_ids=channel_ids
+            )
+        return recording
 
     def save_npz(self, filepath: Path):
         """
@@ -70,8 +91,7 @@ class CarsObject:
         np.savez(filepath, **data_dict)
 
 
-    @classmethod
-    def load_npz(cls, file_path: Path) -> "CarsObject":
+    def load_npz(self, file_path: Path):
         """
         npz形式からCarsObjectを読み込む
         
@@ -82,57 +102,38 @@ class CarsObject:
             CarsObject: 読み込まれたCarsObject
         """
         # npzファイルを読み込み
-        with np.load(file_path, allow_pickle=True) as data:
-            data_dict = {
-                "settings": data["settings"].item(),
-                "units": data["units"],
-                "noise_units": data["noise_units"],
-                "contacts": data["contacts"],
-                # "probe": data["probe"],
-            }
-            print(f"CarsObject loaded from {file_path}")
-            return cls.from_dict(data_dict)
-
-
-    def get_NumpyRecording(self, t_starts: List[float]=[0]) -> NumpyRecording:
-        """
-        t_starts: List[float]
-        """
-        traces = []
-        channel_ids = []
-        for contact in self.contacts:
-            traces.append(contact.get_signal("raw"))
-            channel_ids.append(contact.id)
-        traces = np.array(traces).T
-        channel_ids = np.array(channel_ids)
+        data = np.load(file_path, allow_pickle=True)
         
-        fs = self.settings["baseSettings"]["fs"] if isinstance(self.settings, dict) else self.settings.to_dict()["baseSettings"]["fs"]
-            
-        recording = NumpyRecording(
-            traces,
-            fs,
-            t_starts=t_starts,
-            channel_ids=channel_ids
-            )
-        return recording
+        # 設定を復元
+        settings = Settings(data['settings'])
+        
+        # セルデータを復元
+        cells = []
+        if 'cells' in data:
+            for cell in tqdm(data['cells'], desc="Loading cells", total=len(data['cells'])):
+                cells.append(Cell.from_dict(cell))
+        else:
+            cells = []
+        
+        # ノイズセルデータを復元
+        if 'noise_cells' in data:
+            for noise_cell in tqdm(data['noise_cells'], desc="Loading noise cells", total=len(data['noise_cells'])):
+                noise_cells.append(Cell.from_dict(noise_cell))
+        else:
+            noise_cells = []
+        
+        # サイトデータを復元
+        sites = []
+        if 'sites' in data:
+            for site in tqdm(data['sites'], desc="Loading sites", total=len(data['sites'])):
+                sites.append(Site.from_dict(site))
+        else:
+            sites = []
 
-    def get_units_position(self, as_array: bool=False) -> List[List[float]]:
-        units_position = []
-        for unit in self.units:
-            units_position.append([unit.x, unit.y, unit.z])
-        if as_array:
-            return np.array(units_position)
-        return units_position
-
-    def get_units(self) -> List[Unit]:
-        return self.units
-
-    def get_contacts(self) -> List[Contact]:
-        return self.contacts
-
-    def get_noise_units(self) -> List[Unit]:
-        return self.noise_units
-
-    # def get_probe(self) -> Probe:
-    #     return self.probe
-
+        self._settings = settings
+        self._cells = cells
+        self._sites = sites
+        self._noise_cells = noise_cells
+        
+        print(f"CarsObject loaded from {file_path}")
+        return self

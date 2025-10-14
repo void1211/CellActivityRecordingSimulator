@@ -1,11 +1,9 @@
+# from pydantic import BaseModel, field_validator
 from pathlib import Path
-from typing import Union
-from .BaseSettings import BaseSettings
-import random
-import numpy as np
 import json
 import logging
-
+from .BaseSettings import BaseSettings
+from .carsIO import load_cells_from_json, load_sites_from_json
 class Settings(BaseSettings):
     def __init__(self, data: dict=None):
         super().__init__(data)
@@ -15,11 +13,6 @@ class Settings(BaseSettings):
         self.driftSettings = DriftSettings(safe_get(data, "driftSettings"))
         self.powerNoiseSettings = PowerNoiseSettings(safe_get(data, "powerNoiseSettings"))
         self.templateSimilarityControlSettings = TemplateSimilarityControlSettings(safe_get(data, "templateSimilarityControlSettings"))
-
-        self.get_validation_summary()
-
-        random.seed(self.rootSettings.random_seed)
-        np.random.seed(self.rootSettings.random_seed)
 
     def validate(self) -> list[str]:
         """
@@ -52,45 +45,19 @@ class Settings(BaseSettings):
         else:
             return f"✗ 設定に{len(errors)}個のエラーがあります:\n" + "\n".join(f"  - {error}" for error in errors)
 
-    @classmethod
-    def load(cls, object: Union[Path, "Settings", dict, None]) -> "Settings":
-        if object is None:
-            return cls(default_settings())
-        elif isinstance(object, Path):
-            return cls.load_from_json(object)
-        elif isinstance(object, Settings):
-            return object
-        elif isinstance(object, dict):
-            return cls.from_dict(object)
-        else:
-            raise ValueError(f"Invalid object: {object}")
-
-    @classmethod
-    def load_from_json(cls, path: Path) -> "Settings":
-        with open(path, "r") as f:
-            data = json.load(f)
-        if "baseSettings" not in data:
-            try:
-                data = convert_legacySettings(data)
-            except Exception:
-                logging.warning(f"convert legacySettings error. use default settings.")
-                data = default_settings()
-        return cls.from_dict(data)
-        
-    @classmethod
-    def from_dict(cls, data: dict) -> "Settings":
-        return cls(data)
+    def from_dict(self, data: dict) -> "Settings":
+        self.data = data
+        self.rootSettings = RootSettings(safe_get(data, "baseSettings"))
+        self.spikeSetting = SpikeSettings(safe_get(data, "spikeSettings"))
+        self.noiseSettings = NoiseSettings(safe_get(data, "noiseSettings"))
+        self.driftSettings = DriftSettings(safe_get(data, "driftSettings"))
+        self.powerNoiseSettings = PowerNoiseSettings(safe_get(data, "powerNoiseSettings"))
+        self.templateSimilarityControlSettings = TemplateSimilarityControlSettings(safe_get(data, "templateSimilarityControlSettings"))
+        return self
         
 
     def to_dict(self) -> dict:
-        return {
-            "baseSettings": self.rootSettings.to_dict(),
-            "spikeSettings": self.spikeSetting.to_dict(),
-            "noiseSettings": self.noiseSettings.to_dict(),
-            "driftSettings": self.driftSettings.to_dict(),
-            "powerNoiseSettings": self.powerNoiseSettings.to_dict(),
-            "templateSimilarityControlSettings": self.templateSimilarityControlSettings.to_dict(),
-        }
+        return self.data
 
 class RootSettings(BaseSettings):
 
@@ -106,26 +73,13 @@ class RootSettings(BaseSettings):
         errors = []
         if self.name is None:
             errors.append("name error.")
-        if self.fs is None or self.fs <= 0:
+        if self.fs <= 0:
             errors.append("fs error.")
-        if self.duration is None or self.duration <= 0:
+        if self.duration <= 0:
             errors.append("duration error.")
-        if self.random_seed is not None and not isinstance(self.random_seed, int):
+        if not isinstance(self.random_seed, int):
             errors.append("random_seed error.")
         return errors
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "RootSettings":
-        return cls(data)
-    
-    def to_dict(self) -> dict:
-        return {
-            "name": self.name,
-            "pathSaveDir": self.pathSaveDir,
-            "fs": self.fs,
-            "duration": self.duration,
-            "random_seed": self.random_seed,
-        }
 
 class SpikeSettings(BaseSettings):
     def __init__(self, data: dict):
@@ -149,62 +103,19 @@ class SpikeSettings(BaseSettings):
 
     def validate(self) -> list[str]:
         errors = []
-        if self.avgSpikeRate is None or self.avgSpikeRate <= 0:
+        if self.avgSpikeRate <= 0:
             errors.append("avgSpikeRate error.")
-        if self.isRefractory and (self.refractoryPeriod is None or self.refractoryPeriod < 0):
+        if self.isRefractory and self.refractoryPeriod < 0:
             errors.append("refractoryPeriod error.")
-        if self.absolute_refractory_ratio is not None and (self.absolute_refractory_ratio < 0 or self.absolute_refractory_ratio > 1):
+        if self.absolute_refractory_ratio < 0 or self.absolute_refractory_ratio > 1:
             errors.append("absolute_refractory_ratio error.")
         if self.spikeType not in ["gabor", "exponential", "template", "truth"]:
             errors.append(f"spikeType error.")
-        if self.amplitudeMax is None or self.amplitudeMax <= 0 or (self.amplitudeMin is not None and self.amplitudeMax <= self.amplitudeMin):
+        if self.amplitudeMax is None or self.amplitudeMax <= 0 or self.amplitudeMax <= self.amplitudeMin:
             errors.append("amplitudeMax error.")
-        if self.amplitudeMin is None or self.amplitudeMin <= 0 or (self.amplitudeMax is not None and self.amplitudeMin >= self.amplitudeMax):
+        if self.amplitudeMin is None or self.amplitudeMin <= 0 or self.amplitudeMin >= self.amplitudeMax:
             errors.append("amplitudeMin error.")
         return errors
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "SpikeSettings":
-        data_dict = {
-            "rate": safe_get(data, "rate"),
-            "isRefractory": safe_get(data, "isRefractory"),
-            "refractoryPeriod": safe_get(data, "refractoryPeriod"),
-            "absolute_refractory_ratio": safe_get(data, "absolute_refractory_ratio"),
-            "spikeType": safe_get(data, "spikeType"),
-            "amplitudeMax": safe_get(data, "amplitudeMax"),
-            "amplitudeMin": safe_get(data, "amplitudeMin"),
-            "attenTime": safe_get(data, "attenTime"),
-        }
-        if data_dict["spikeType"] == "gabor":
-            data_dict["gabor"] = GaborSettings.from_dict(safe_get(data, "gabor"))
-        elif data_dict["spikeType"] == "exponential":
-            data_dict["exponential"] = ExponentialSpikeSettings.from_dict(safe_get(data, "exponential"))
-        elif data_dict["spikeType"] == "template":
-            data_dict["template"] = TemplateSettings.from_dict(safe_get(data, "template"))
-        elif data_dict["spikeType"] == "truth":
-            data_dict["truth"] = TruthSpikeSettings.from_dict(safe_get(data, "truth"))
-        return cls(data_dict)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "rate": self.avgSpikeRate,
-            "isRefractory": self.isRefractory,
-            "refractoryPeriod": self.refractoryPeriod,
-            "absolute_refractory_ratio": self.absolute_refractory_ratio,
-            "spikeType": self.spikeType,
-            "amplitudeMax": self.amplitudeMax,
-            "amplitudeMin": self.amplitudeMin,
-            "attenTime": self.attenTime,
-        }
-        if self.spikeType == "gabor":
-            data_dict["gabor"] = self.gabor.to_dict()
-        elif self.spikeType == "exponential":
-            data_dict["exponential"] = self.exponential.to_dict()
-        elif self.spikeType == "template":
-            data_dict["template"] = self.template.to_dict()
-        elif self.spikeType == "truth":
-            data_dict["truth"] = self.truth.to_dict()
-        return data_dict
 
 class GaborSettings(BaseSettings):
 
@@ -239,20 +150,6 @@ class GaborSettings(BaseSettings):
             if self.width is None or self.width <= 0:
                 errors.append("width error.")
         return errors
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "GaborSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "randType": self.randType,
-            "sigma": self.sigma,
-            "f0": self.f0,
-            "theta": self.theta,
-            "width": self.width,
-        }
-        return data_dict
 
 class ExponentialSpikeSettings(BaseSettings):
     
@@ -308,24 +205,6 @@ class ExponentialSpikeSettings(BaseSettings):
                 errors.append("smooth_ms error.")
         return errors
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "ExponentialSpikeSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "randType": self.randType,
-            "ms_before": self.ms_before,
-            "ms_after": self.ms_after,
-            "negative_amplitude": self.negative_amplitude,
-            "positive_amplitude": self.positive_amplitude,
-            "depolarization_ms": self.depolarization_ms,
-            "repolarization_ms": self.repolarization_ms,
-            "recovery_ms": self.recovery_ms,
-            "smooth_ms": self.smooth_ms,
-        }
-        return data_dict
-
 class TemplateSettings(BaseSettings):
     
     def __init__(self, data: dict):
@@ -338,16 +217,6 @@ class TemplateSettings(BaseSettings):
             errors.append("pathSpikeList error.")
         return errors
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "TemplateSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "pathSpikeList": self.pathSpikeList,
-        }
-        return data_dict
-
 class TruthSpikeSettings(BaseSettings):
     
     def __init__(self, data: dict):
@@ -359,16 +228,6 @@ class TruthSpikeSettings(BaseSettings):
         if self.pathSpikeList is None:
             errors.append("pathSpikeList error.")
         return errors
-    
-    @classmethod
-    def from_dict(cls, data: dict) -> "TruthSpikeSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "pathSpikeList": self.pathSpikeList,
-        }
-        return data_dict
 
 class NoiseSettings(BaseSettings):
 
@@ -385,20 +244,7 @@ class NoiseSettings(BaseSettings):
         if self.noiseType not in ["none", "normal", "gaussian", "truth", "model"]:
             errors.append(f"noiseType error: {self.noiseType}")
         return errors
-    
-    @classmethod
-    def from_dict(cls, data: dict) -> "NoiseSettings":
-        return cls(data)
 
-    def to_dict(self) -> dict:
-        data_dict = {
-            "noiseType": self.noiseType,
-            "model": self.model.to_dict(),
-            "normal": self.normal.to_dict(),
-            "gaussian": self.gaussian.to_dict(),
-            "truth": self.truth.to_dict(),
-        }
-        return data_dict
 class NormalSettings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
@@ -408,15 +254,6 @@ class NormalSettings(BaseSettings):
         if self.noiseAmp is None or self.noiseAmp <= 0:
             errors.append("amplitude error.")
         return errors
-    @classmethod
-    def from_dict(cls, data: dict) -> "NormalSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "amplitude": self.noiseAmp,
-        }
-        return data_dict
 
 class GaussianSettings(BaseSettings):
     def __init__(self, data: dict):
@@ -434,42 +271,18 @@ class GaussianSettings(BaseSettings):
             errors.append("scale error.")
         return errors
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "GaussianSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "amplitude": self.noiseAmp,
-            "location": self.noiseLoc,
-            "scale": self.noiseScale,
-        }
-        return data_dict
-
-
 class TruthNoiseSettings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
         self.pathNoise = safe_get(data, "pathNoise")
-        self.pathContacts = safe_get(data, "pathContacts")
+        self.pathSites = safe_get(data, "pathSites")
     def validate(self) -> list[str]:
         errors = []
         if self.pathNoise is None:
             errors.append("pathNoise error.")
-        if self.pathContacts is None:
-            errors.append("pathContacts error.")
+        if self.pathSites is None:
+            errors.append("pathSites error.")
         return errors
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "TruthNoiseSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "pathNoise": self.pathNoise,
-            "pathContacts": self.pathContacts,
-        }
-        return data_dict
 
 class ModelSettings(BaseSettings):
     def __init__(self, data: dict):
@@ -488,87 +301,36 @@ class ModelSettings(BaseSettings):
             errors.append("inviolableArea error.")
         return errors
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "ModelSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "density": self.density,
-            "margin": self.margin,
-            "inviolableArea": self.inviolableArea,
-        }
-        return data_dict
-
 class DriftSettings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
         self.enable = safe_get(data, "enable")
         self.driftType = safe_get(data, "driftType")
-        self.randomWalk = RandomWalkSettings(safe_get(data, "random_walk"))
-        self.step = StepSettings(safe_get(data, "step"))
-        self.oscillatory = OscillatorySettings(safe_get(data, "oscillatory"))
-        self.exponential = ExponentialDriftSettings(safe_get(data, "exponential"))
+        if self.driftType == "random_walk": 
+            self.randomWalk = RandomWalkSettings(safe_get(data, "random_walk"))
+        elif self.driftType == "step":
+            self.step = StepSettings(safe_get(data, "step"))
+        elif self.driftType == "oscillatory":
+            self.oscillatory = OscillatorySettings(safe_get(data, "oscillatory"))
+        elif self.driftType == "exponential":
+            self.exponential = ExponentialDriftSettings(safe_get(data, "exponential"))
 
     def validate(self) -> list[str]:
         errors = []
         if self.enable and self.driftType not in ["random_walk", "step", "oscillatory", "exponential"]:
             errors.append(f"driftType error: {self.driftType}")
         return errors
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "DriftSettings":
-        data_dict = {
-            "enable": safe_get(data, "enable"),
-            "driftType": safe_get(data, "driftType"),
-        }
-        if data_dict["driftType"] == "random_walk":
-            data_dict["random_walk"] = RandomWalkSettings.from_dict(safe_get(data, "random_walk"))
-        elif data_dict["driftType"] == "step":
-            data_dict["step"] = StepSettings.from_dict(safe_get(data, "step"))
-        elif data_dict["driftType"] == "oscillatory":
-            data_dict["oscillatory"] = OscillatorySettings.from_dict(safe_get(data, "oscillatory"))
-        elif data_dict["driftType"] == "exponential":
-            data_dict["exponential"] = ExponentialDriftSettings.from_dict(safe_get(data, "exponential"))
-        return cls(data_dict)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "enable": self.enable,
-            "driftType": self.driftType,
-        }
-        if self.driftType == "random_walk":
-            data_dict["random_walk"] = self.randomWalk.to_dict()
-        elif self.driftType == "step":
-            data_dict["step"] = self.step.to_dict()
-        elif self.driftType == "oscillatory":
-            data_dict["oscillatory"] = self.oscillatory.to_dict()
-        elif self.driftType == "exponential":
-            data_dict["exponential"] = self.exponential.to_dict()
-        return data_dict
-
 class RandomWalkSettings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
         self.amplitude = safe_get(data, "amplitude")
         self.frequency = safe_get(data, "frequency")
-    
+
     def validate(self) -> list[str]:
         errors = []
         if self.noiseType not in ["none", "normal", "gaussian", "truth", "model"]:
             errors.append("noiseType error.")
         return errors
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "RandomWalkSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "amplitude": self.amplitude,
-            "frequency": self.frequency,
-        }
-        return data_dict
 
 class StepSettings(BaseSettings):
     def __init__(self, data: dict):
@@ -583,18 +345,6 @@ class StepSettings(BaseSettings):
         if self.frequency <= 0:
             errors.append("frequency error.")
         return errors
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "StepSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "amplitude": self.amplitude,
-            "frequency": self.frequency,
-        }
-        return data_dict
-
 class OscillatorySettings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
@@ -608,16 +358,6 @@ class OscillatorySettings(BaseSettings):
             errors.append("frequency error.")
         return errors
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "OscillatorySettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "amplitude": self.amplitude,
-            "frequency": self.frequency,
-        }
-        return data_dict
 class ExponentialDriftSettings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
@@ -631,17 +371,6 @@ class ExponentialDriftSettings(BaseSettings):
             errors.append("frequency error.")
         return errors
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "ExponentialDriftSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "amplitude": self.amplitude,
-            "frequency": self.frequency,
-        }
-        return data_dict
-
 class PowerNoiseSettings(BaseSettings):
     def __init__(self, data: dict):
         super().__init__(data)
@@ -650,23 +379,11 @@ class PowerNoiseSettings(BaseSettings):
         self.amplitude = safe_get(data, "amplitude")
     def validate(self) -> list[str]:
         errors = []
-        if self.enable and (self.frequency is None or self.frequency <= 0):
+        if self.enable and self.frequency <= 0:
             errors.append("frequency error.")
-        if self.amplitude is not None and self.amplitude <= 0:
+        if self.amplitude <= 0:
             errors.append("amplitude error.")
         return errors
-
-    @classmethod
-    def from_dict(cls, data: dict) -> "PowerNoiseSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "enable": self.enable,
-            "frequency": self.frequency,
-            "amplitude": self.amplitude,
-        }
-        return data_dict
 
 class TemplateSimilarityControlSettings(BaseSettings):
     def __init__(self, data: dict):
@@ -677,31 +394,18 @@ class TemplateSimilarityControlSettings(BaseSettings):
         self.similarity_control_attempts = safe_get(data, "similarity_control_attempts")
     def validate(self) -> list[str]:
         errors = []
-        if self.enable and self.min_cosine_similarity is not None and self.max_cosine_similarity is not None:
-            if self.min_cosine_similarity >= self.max_cosine_similarity:
-                errors.append("min_cosine_similarity must be less than max_cosine_similarity")
-        if self.similarity_control_attempts is not None and self.similarity_control_attempts <= 0:
+        if self.enable and self.min_cosine_similarity >= self.max_cosine_similarity:
+            errors.append("min_cosine_similarity must be less than max_cosine_similarity")
+        if self.similarity_control_attempts <= 0:
             errors.append("similarity_control_attempts must be positive")
         return errors
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "TemplateSimilarityControlSettings":
-        return cls(data)
-
-    def to_dict(self) -> dict:
-        data_dict = {
-            "enable": self.enable,
-            "min_cosine_similarity": self.min_cosine_similarity,
-            "max_cosine_similarity": self.max_cosine_similarity,
-            "similarity_control_attempts": self.similarity_control_attempts,
-        }
-        return data_dict
-
-def default_settings() -> dict:
+def default_settings(key: str=None) -> dict:
     default_settings ={
         "baseSettings":{
             "name": "default",
             "pathSaveDir": "default",
+
             "fs": 30000,
             "duration": 10,
             "random_seed": 0,
@@ -757,7 +461,7 @@ def default_settings() -> dict:
             },
             "truth":{
                 "pathNoise": "test_example_condition1.noise",
-                "pathContacts": "test_example_condition1.contacts",
+                "pathSites": "test_example_condition1.sites",
             },
         },
         "driftSettings":{
@@ -792,116 +496,144 @@ def default_settings() -> dict:
             "similarity_control_attempts": 100,
         },
     }
-    return default_settings
+    if key is not None:
+        if key not in default_settings.keys():
+            raise ValueError(f"Invalid key: {key}")
+        return default_settings[key]
+    else:   
+        return default_settings
+
+def default_cells() -> dict:
+    default_cells = {
+        "id": [1, 2, 3, 4, 5, 6, 7, 8],
+        "x": [0, 0, 0, 0, 0, 0, 0, 0],
+        "y": [0, 50, 100, 150, 200, 250, 300, 350],
+        "z": [0, 0, 0, 0, 0, 0, 0, 0]
+    }
+    default_cells = load_cells_from_json(default_cells)
+    return default_cells
+
+def default_sites() -> dict:
+    default_sites = {
+        "id": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        "x": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        "y": [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375],
+        "z": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    }
+    default_sites = load_sites_from_json(default_sites)
+    return default_sites
 
 def safe_get(data: dict, key: str, default: any=None) -> any:
-    """辞書から安全に値を取得する。キーが存在しない場合はdefaultを返す"""
-    if data is None:
+    if key in data:
+        return data[key]
+    else:
+        logging.warning(f"Key {key} not found in data. Returning default: {default}")
+        if default is None:
+            default = default_settings(key)
         return default
-    
-    value = data.get(key, default)
-    if value is None:
-        return default
-    
-    return value
-
 def convert_legacySettings(legacySettings: dict) -> dict:
     """レガシーな設定を新しい設定に変換する"""
+    def safe_get(key: str, default=None):
+        """安全にキーを取得する"""
+        return legacySettings.get(key, default)
     
     newSettings = {
         "baseSettings": {
-            "name": safe_get(legacySettings, "name"),
-            "pathSaveDir": safe_get(legacySettings, "pathSaveDir"),
-            "fs": safe_get(legacySettings, "fs"),
-            "duration": safe_get(legacySettings, "duration"),
-            "random_seed": safe_get(legacySettings, "random_seed"),
+            "name": safe_get("name"),
+            "pathSaveDir": safe_get("pathSaveDir"),
+            "fs": safe_get("fs"),
+            "duration": safe_get("duration"),
+            "random_seed": safe_get("random_seed"),
         },
         "spikeSettings": {
-            "rate": safe_get(legacySettings, "avgSpikeRate"),
-            "isRefractory": safe_get(legacySettings, "isRefractory"),
-            "refractoryPeriod": safe_get(legacySettings, "refractoryPeriod"),
-            "absolute_refractory_ratio": safe_get(legacySettings, "absolute_refractory_ratio", 1.0),
-            "amplitudeMax": safe_get(legacySettings, "spikeAmpMax"),
-            "amplitudeMin": safe_get(legacySettings, "spikeAmpMin"),
-            "attenTime": safe_get(legacySettings, "attenTime"),
-            "spikeType": safe_get(legacySettings, "spikeType"),
+            "rate": safe_get("avgSpikeRate"),
+            "isRefractory": safe_get("isRefractory"),
+            "refractoryPeriod": safe_get("refractoryPeriod"),
+            "absolute_refractory_ratio": safe_get("absolute_refractory_ratio", 1.0),
+            "amplitudeMax": safe_get("spikeAmpMax"),
+            "amplitudeMin": safe_get("spikeAmpMin"),
+            "attenTime": safe_get("attenTime"),
+            "spikeType": safe_get("spikeType"),
             "gabor": {
-                "randType": safe_get(legacySettings, "randType"),
-                "sigma": safe_get(legacySettings, "sigma"),
-                "f0": safe_get(legacySettings, "f0"),
-                "theta": safe_get(legacySettings, "theta"),
-                "width": safe_get(legacySettings, "spikeWidth"),
+                "randType": safe_get("randType"),
+                "sigma": safe_get("sigma"),
+                "f0": safe_get("f0"),
+                "theta": safe_get("theta"),
+                "width": safe_get("spikeWidth"),
             },
             "exponential": {
-                "randType": safe_get(legacySettings, "randType"),
-                "ms_before": safe_get(legacySettings, "ms_before"),
-                "ms_after": safe_get(legacySettings, "ms_after"),
-                "negative_amplitude": safe_get(legacySettings, "negative_amplitude"),
-                "positive_amplitude": safe_get(legacySettings, "positive_amplitude"),
-                "depolarization_ms": safe_get(legacySettings, "depolarization_ms"),
-                "repolarization_ms": safe_get(legacySettings, "repolarization_ms"),
-                "recovery_ms": safe_get(legacySettings, "recovery_ms"),
-                "smooth_ms": safe_get(legacySettings, "smooth_ms"),
+                "randType": safe_get("randType"),
+                "ms_before": safe_get("ms_before"),
+                "ms_after": safe_get("ms_after"),
+                "negative_amplitude": safe_get("negative_amplitude"),
+                "positive_amplitude": safe_get("positive_amplitude"),
+                "depolarization_ms": safe_get("depolarization_ms"),
+                "repolarization_ms": safe_get("repolarization_ms"),
+                "recovery_ms": safe_get("recovery_ms"),
+                "smooth_ms": safe_get("smooth_ms"),
             },
             "template": {
-                "pathSpikeList": safe_get(legacySettings, "pathSpikeList"),
+                "pathSpikeList": safe_get("pathSpikeList"),
             },
             "truth": {
-                "pathSpikeList": safe_get(legacySettings, "pathSpikeList"),
+                "pathSpikeList": safe_get("pathSpikeList"),
             },
         },
         "noiseSettings": {
-            "noiseType": safe_get(legacySettings, "noiseType"),
+            "noiseType": safe_get("noiseType"),
             "model": {
-                "density": safe_get(legacySettings, "density"),
-                "margin": safe_get(legacySettings, "margin"),
-                "inviolableArea": safe_get(legacySettings, "inviolableArea"),
+                "density": safe_get("density"),
+                "margin": safe_get("margin"),
+                "inviolableArea": safe_get("inviolableArea"),
             },
             "normal": {
-                "amplitude": safe_get(legacySettings, "amplitude"),
+                "amplitude": safe_get("amplitude"),
             },
             "gaussian": {
-                "amplitude": safe_get(legacySettings, "amplitude"),
-                "location": safe_get(legacySettings, "loc"),
-                "scale": safe_get(legacySettings, "scale"),
+                "amplitude": safe_get("amplitude"),
+                "location": safe_get("loc"),
+                "scale": safe_get("scale"),
             },
             "truth": {
-                "pathNoise": safe_get(legacySettings, "pathNoise"),
-                "pathContacts": safe_get(legacySettings, "pathContacts"),
+                "pathNoise": safe_get("pathNoise"),
+                "pathSites": safe_get("pathSites"),
             },
         },
         "driftSettings": {
-            "enable": safe_get(legacySettings, "enable_drift"),
-            "driftType": safe_get(legacySettings, "drift_type"),
+            "enable": safe_get("enable_drift"),
+            "driftType": safe_get("drift_type"),
             "random_walk": {
-                "amplitude": safe_get(legacySettings, "drift_amplitude"),
-                "frequency": safe_get(legacySettings, "drift_frequency"),
+                "amplitude": safe_get("drift_amplitude"),
+                "frequency": safe_get("drift_frequency"),
             },
             "step": {
-                "amplitude": safe_get(legacySettings, "drift_amplitude"),
-                "frequency": safe_get(legacySettings, "drift_frequency"),
+                "amplitude": safe_get("drift_amplitude"),
+                "frequency": safe_get("drift_frequency"),
             },
             "oscillatory": {
-                "amplitude": safe_get(legacySettings, "drift_amplitude"),
-                "frequency": safe_get(legacySettings, "drift_frequency"),
+                "amplitude": safe_get("drift_amplitude"),
+                "frequency": safe_get("drift_frequency"),
             },
             "exponential": {
-                "amplitude": safe_get(legacySettings, "drift_amplitude"),
-                "frequency": safe_get(legacySettings, "drift_frequency"),
+                "amplitude": safe_get("drift_amplitude"),
+                "frequency": safe_get("drift_frequency"),
             },
         },
         "powerNoiseSettings": {
-            "enable": safe_get(legacySettings, "enable_power_noise"),
-            "frequency": safe_get(legacySettings, "power_line_frequency"),
-            "amplitude": safe_get(legacySettings, "power_noise_amplitude"),
+            "enable": safe_get("enable_power_noise"),
+            "frequency": safe_get("power_line_frequency"),
+            "amplitude": safe_get("power_noise_amplitude"),
         },
         "templateSimilarityControlSettings": {
-            "enable": safe_get(legacySettings, "enable_template_similarity_control"),
-            "min_cosine_similarity": safe_get(legacySettings, "min_cosine_similarity"),
-            "max_cosine_similarity": safe_get(legacySettings, "max_cosine_similarity"),
-            "similarity_control_attempts": safe_get(legacySettings, "similarity_control_attempts"),
+            "enable": safe_get("enable_template_similarity_control"),
+            "min_cosine_similarity": safe_get("min_cosine_similarity"),
+            "max_cosine_similarity": safe_get("max_cosine_similarity"),
+            "similarity_control_attempts": safe_get("similarity_control_attempts"),
         },
     }
 
     return newSettings
+
+def from_dict(data: dict) -> Settings:
+    return Settings(data)
     

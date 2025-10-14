@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Unit Activity Recording Simulator - エントリーポイント
+Cell Activity Recording Simulator - エントリーポイント
 """
 
 import sys
@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Unit Activity Recording Simulator')
+    parser = argparse.ArgumentParser(description='Cell Activity Recording Simulator')
     parser.add_argument(
         '--example-dir', '-ed',
         type=str,

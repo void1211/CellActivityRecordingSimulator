@@ -32,10 +32,6 @@ def addSpikeToSignal(signal: np.ndarray, spikeTimes: list[int], spikeTemp: list[
         if signal.dtype != np.float64:
             signal = signal.astype(np.float64)
     
-    # テンプレートが空または無効な場合は何もせずに返す
-    if len(spikeTemp) == 0:
-        return signal
-    
     # ピーク位置を正しく計算（負のピークも考慮）
     if np.min(spikeTemp) < 0 and abs(np.min(spikeTemp)) > abs(np.max(spikeTemp)):
         # 負のピークが主成分の場合

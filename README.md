@@ -1,4 +1,4 @@
-# Unit Activity Recording Simulator
+# Cell Activity Recording Simulator
 
 神経細胞のスパイク信号と記録サイト信号をシミュレートするPythonプロジェクト
 
@@ -42,8 +42,8 @@ python main.py
 ```json
 {
     "name": "2025_ex-1_condition1",
-    "pathUnit": "units.json",
-    "pathContact": "contacts.json",
+    "pathCell": "cells.json",
+    "pathSite": "sites.json",
     "pathSaveDir": null,
     "fs": 30000,
     "duration": 10,
@@ -66,8 +66,8 @@ cellactivityrecodingsimulator/
 ├── src/
 │   └── cellactivityrecodingsimulator/     # メインプロジェクト
 │       ├── main.py                        # メインプログラム
-│       ├── Unit.py                        # 細胞クラス
-│       ├── Contact.py                        # 記録サイトクラス
+│       ├── Cell.py                        # 細胞クラス
+│       ├── Site.py                        # 記録サイトクラス
 │       ├── Settings.py                    # 設定クラス
 │       ├── carsIO.py                      # I/O機能
 │       └── tools.py                       # ユーティリティ
@@ -75,13 +75,13 @@ cellactivityrecodingsimulator/
 │   └── ex-1/
 │       ├── condition1/                    # 条件1
 │       │   ├── settings.json             # 設定ファイル
-│       │   ├── units.json                # セルデータ
-│       │   ├── contacts.json                # プローブデータ
+│       │   ├── cells.json                # セルデータ
+│       │   ├── sites.json                # プローブデータ
 │       │   └── results/                  # 結果保存先
 │       └── condition2/                    # 条件2
 │           ├── settings.json             # 設定ファイル
-│           ├── units.json                # セルデータ
-│           ├── contacts.json                # プローブデータ
+│           ├── cells.json                # セルデータ
+│           ├── sites.json                # プローブデータ
 │           └── results/                  # 結果保存先
 ├── main.py                               # エントリーポイント
 ├── pyproject.toml                        # プロジェクト設定

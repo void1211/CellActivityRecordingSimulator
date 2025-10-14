@@ -33,7 +33,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='UnitActivitySimulator',
+    name='CellActivitySimulator',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
