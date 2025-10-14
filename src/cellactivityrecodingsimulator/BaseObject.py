@@ -1,16 +1,16 @@
 from typing import List
 
 class BaseObject():
-    def __init__(self, x: float = 0, y: float = 0, z: float = 0):
+    def __init__(self):
         """
         x: float
         y: float
         z: float
         """
-        self.x = x
-        self.y = y
-        self.z = z
-        self.set_position(x, y, z)
+        self.x = 0
+        self.y = 0
+        self.z = 0
+        self.set_position(self.x, self.y, self.z)
 
     def __str__(self):
         return f"BaseObject[{self.x}, {self.y}, {self.z}]"

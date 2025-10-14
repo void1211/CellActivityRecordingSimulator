@@ -69,20 +69,21 @@ class ProbeObject(Probe):
         contacts = []
         probe_dict = probe.to_dict()
         contact_positions = np.array(probe_dict["contact_positions"])
+        contact_ids = np.array(probe_dict["contact_ids"])
         is_3d = True
         if contact_positions.shape[1] != 3:
             is_3d = False
         for i in range(len(contact_positions)):
             if is_3d:
                 contact_data = {
-                    "id": i,
+                    "id": contact_ids[i],
                     "x": contact_positions[i][0],
                     "y": contact_positions[i][1],
                     "z": contact_positions[i][2]
                 }
             else:
                 contact_data = {
-                    "id": i,
+                    "id": contact_ids[i],
                     "x": contact_positions[i][0],
                     "y": contact_positions[i][1],
                     "z": 0
@@ -93,3 +94,6 @@ class ProbeObject(Probe):
 
     def get_contacts_num(self):
         return len(self.contacts)
+
+    def get_contacts(self):
+        return self.contacts

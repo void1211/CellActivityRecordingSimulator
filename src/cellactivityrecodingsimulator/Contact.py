@@ -7,7 +7,7 @@ from .Unit import Unit
 class Contact(BaseObject):
     def __init__(self):
         super().__init__()
-        self.id = id
+        self.id = 0
 
         self.signal_spike = []
         self.signal_drift = []
@@ -147,7 +147,9 @@ class Contact(BaseObject):
     def to_dict(self):
         return {
             "id": self.id,
-            "position": [self.x, self.y, self.z],
+            "x": self.x,
+            "y": self.y,
+            "z": self.z,
             "spike": self.get_signal("spike"),
             "drift": self.get_signal("drift"),
             "power": self.get_signal("power"),
@@ -157,10 +159,10 @@ class Contact(BaseObject):
     @classmethod    
     def from_dict(cls, data: dict) -> "Contact":
         contact = cls()
-        contact.id = data.get("id", 0)
-        contact.x = data.get("x", 0)
-        contact.y = data.get("y", 0)
-        contact.z = data.get("z", 0)
+        contact.id = data.get("id", None)
+        contact.x = data.get("x", None)
+        contact.y = data.get("y", None)
+        contact.z = data.get("z", None)
         contact.set_signal("spike", data.get("spike", np.array([])))
         contact.set_signal("drift", data.get("drift", np.array([])))
         contact.set_signal("power", data.get("power", np.array([])))

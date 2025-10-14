@@ -136,3 +136,12 @@ class Unit(BaseObject):
             unit.templateObject = BaseTemplate().set_template(np.array([0.0]))
         
         return unit
+
+    def get_spike_times(self) -> List[int]:
+        return self.spikeTimeList
+
+    def get_spike_amplitudes(self) -> List[float]:
+        return self.spikeAmpList
+
+    def get_template(self) -> List[float]:
+        return self.templateObject.get_template()

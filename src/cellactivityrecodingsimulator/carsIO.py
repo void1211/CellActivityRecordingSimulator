@@ -5,8 +5,9 @@ import logging
 
 from .Contact import Contact
 from .Unit import Unit
+from probeinterface import Probe
 
-def save_data(path: Path, units: list[Unit], contacts: list[Contact], noise_units: list[Unit]=None, fs: float=None):
+def save_data(path: Path, units: list[Unit], contacts: list[Contact], noise_units: list[Unit]=None, fs: float=None, probe: Probe=None):
     # パラメータの検証
 
     logging.info(f"データ保存開始: {path}")

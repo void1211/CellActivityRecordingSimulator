@@ -6,6 +6,7 @@ from .Settings import Settings
 from .Unit import Unit
 from .Contact import Contact
 from spikeinterface.core import NumpyRecording
+from probeinterface import Probe
 
 
 class CarsObject:
@@ -15,11 +16,15 @@ class CarsObject:
     units: List[Unit]=None, 
     contacts: List[Contact]=None,
     noise_units: List[Unit]=None,
+    probe: Probe=None,
     ):
         self.settings = settings
         self.units = units
         self.contacts = contacts
         self.noise_units = noise_units
+
+        # TODO: ProbeObjectを使用した保存
+        # self.probe = probe
 
     def __str__(self):
         if self.noise_units is None:
@@ -36,6 +41,7 @@ class CarsObject:
             "units": [unit.to_dict() for unit in self.units],
             "contacts": [contact.to_dict() for contact in self.contacts],
             "noise_units": [noise_unit.to_dict() for noise_unit in self.noise_units] if self.noise_units else [],
+            # "probe": self.probe.to_dict() if self.probe else None,
             }
 
     @classmethod
@@ -44,11 +50,13 @@ class CarsObject:
         units = [Unit.from_dict(unit) for unit in data["units"]]
         contacts = [Contact.from_dict(contact) for contact in data["contacts"]]
         noise_units = [Unit.from_dict(noise_unit) for noise_unit in data["noise_units"]]
+        # probe = Probe.from_dict(data["probe"]) if data["probe"] else None
         return cls(
             settings=settings,
             units=units,
             contacts=contacts,
             noise_units=noise_units,
+            # probe=probe,
         )
 
     def save_npz(self, filepath: Path):
@@ -80,6 +88,7 @@ class CarsObject:
                 "units": data["units"],
                 "noise_units": data["noise_units"],
                 "contacts": data["contacts"],
+                # "probe": data["probe"],
             }
             print(f"CarsObject loaded from {file_path}")
             return cls.from_dict(data_dict)
@@ -114,4 +123,16 @@ class CarsObject:
         if as_array:
             return np.array(units_position)
         return units_position
+
+    def get_units(self) -> List[Unit]:
+        return self.units
+
+    def get_contacts(self) -> List[Contact]:
+        return self.contacts
+
+    def get_noise_units(self) -> List[Unit]:
+        return self.noise_units
+
+    # def get_probe(self) -> Probe:
+    #     return self.probe
 

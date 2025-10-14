@@ -13,7 +13,7 @@ from .carsIO import save_data
 from .Noise import RandomNoise, DriftNoise, PowerLineNoise
 from .Template import BaseTemplate
 from .tools import make_save_dir
-from .plot.main import plot_main
+from .plot import plot_GTUnits, plot_Signals
 from .ProbeObject import ProbeObject
 # ベースディレクトリを固定
 BASE_DIR = Path("simulations")
@@ -178,7 +178,8 @@ def run(
 
         # プロット表示（オプション）
         if plot:
-            plot_main(gt_units.units, noise_units_list, probe.contacts, str(dir.name), settings["baseSettings"]["pathSaveDir"])
+            plot_GTUnits(gt_units.units, with_probe=True, probe=probe)
+            plot_Signals(probe.contacts)
 
         logging.info(f"=== 実験完了 ===")
         return CarsObject(settings, gt_units.units, probe.contacts, noise_units_list)

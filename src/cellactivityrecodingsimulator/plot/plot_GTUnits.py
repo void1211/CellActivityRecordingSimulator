@@ -29,23 +29,21 @@ def plot_GTUnits(
     
     if dimension == "2D":
         for unit in GTUnits.get_units():
-            position = unit.get_position()
-            ax.scatter(position[0], position[1], marker='o', color='blue')
+            ax.scatter(unit.x, unit.y, marker='o', color='blue')
             if with_id:
-                ax.text(position[0], position[1], f'{unit.id}', color='red')
+                ax.text(unit.x, unit.y, f'{unit.id}', color='red')
             if with_group:
-                ax.text(position[0], position[1], f'{unit.group}', color='green')
+                ax.text(unit.x, unit.y, f'{unit.group}', color='green')
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         
     elif dimension == "3D":
         for unit in GTUnits.get_units():
-            position = unit.get_position()
-            ax.scatter(position[0], position[1], position[2], marker='o', color='blue')
+            ax.scatter(unit.x, unit.y, unit.z, marker='o', color='blue')
             if with_id:
-                ax.text(position[0], position[1], position[2], f'{unit.id}', color='red')
+                ax.text(unit.x, unit.y, unit.z, f'{unit.id}', color='red')
             if with_group:
-                ax.text(position[0], position[1], position[2], f'{unit.group}', color='green')
+                ax.text(unit.x, unit.y, unit.z, f'{unit.group}', color='green')
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
