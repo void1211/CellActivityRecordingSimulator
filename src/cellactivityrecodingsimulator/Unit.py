@@ -2,6 +2,7 @@ from .BaseObject import BaseObject
 import numpy as np
 from typing import List
 from .Template import BaseTemplate
+from .gpu_utils import generate_unit_spike_signal_gpu, gpu_manager
 
 class Unit(BaseObject):
     def __init__(self):
@@ -13,6 +14,9 @@ class Unit(BaseObject):
         self.spikeTimeList = []
         self.spikeAmpList = []
         self.templateObject = BaseTemplate()
+        
+        # Unitごとの独立したスパイク信号
+        self.spike_signal = []
 
     def __str__(self):
         return f"Unit{self.id}({self.group}), [{self.x},{self.y},{self.z}]"
@@ -50,6 +54,33 @@ class Unit(BaseObject):
             self.templateObject = template
         else:
             self.templateObject = BaseTemplate.generate(settings)
+
+    def generate_spike_signal(self, settings):
+        """Unitごとのスパイク信号を生成する（GPU対応）"""
+        # Settingsオブジェクトの場合は辞書に変換
+        if hasattr(settings, 'to_dict'):
+            settings = settings.to_dict()
+        
+        spikeTemp = np.array(self.templateObject.get_template(), dtype=np.float64)
+        spikeTimes = self.spikeTimeList
+        spikeAmpList = self.spikeAmpList
+        
+        # テンプレートが空または無効な場合は空の信号を返す
+        if len(spikeTemp) == 0:
+            duration_samples = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
+            self.spike_signal = np.zeros(duration_samples, dtype=np.float64)
+            return self.spike_signal
+        
+        # GPU対応の信号生成を使用
+        self.spike_signal = generate_unit_spike_signal_gpu(
+            settings, spikeTimes, spikeTemp, spikeAmpList
+        )
+        
+        return self.spike_signal
+
+    def get_spike_signal(self) -> np.ndarray:
+        """生成されたスパイク信号を取得する"""
+        return np.array(self.spike_signal) if len(self.spike_signal) > 0 else np.array([])
 
     @classmethod
     def generate(cls, id: int, group: int, x: float, y: float, z: float) -> 'Unit':
@@ -101,6 +132,7 @@ class Unit(BaseObject):
             "spikeTime": self.spikeTimeList,
             "amplitude": self.spikeAmpList,
             "template": self.templateObject.get_template(),
+            "spike_signal": self.spike_signal,
         }
 
     @classmethod
@@ -134,6 +166,9 @@ class Unit(BaseObject):
             unit.templateObject = BaseTemplate().set_template(list(data["template"]))
         else:
             unit.templateObject = BaseTemplate().set_template(np.array([0.0]))
+        
+        # スパイク信号を設定
+        unit.spike_signal = data.get("spike_signal", [])
         
         return unit
 

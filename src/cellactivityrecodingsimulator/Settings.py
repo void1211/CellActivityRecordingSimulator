@@ -15,6 +15,7 @@ class Settings(BaseSettings):
         self.driftSettings = DriftSettings(safe_get(data, "driftSettings"))
         self.powerNoiseSettings = PowerNoiseSettings(safe_get(data, "powerNoiseSettings"))
         self.templateSimilarityControlSettings = TemplateSimilarityControlSettings(safe_get(data, "templateSimilarityControlSettings"))
+        self.gpuSettings = GPUSettings(safe_get(data, "gpuSettings"))
 
         self.get_validation_summary()
 
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
         errors.extend(self.driftSettings.validate())
         errors.extend(self.powerNoiseSettings.validate())
         errors.extend(self.templateSimilarityControlSettings.validate())
+        errors.extend(self.gpuSettings.validate())
         return errors
 
     def is_valid(self) -> bool:
@@ -901,7 +903,36 @@ def convert_legacySettings(legacySettings: dict) -> dict:
             "max_cosine_similarity": safe_get(legacySettings, "max_cosine_similarity"),
             "similarity_control_attempts": safe_get(legacySettings, "similarity_control_attempts"),
         },
+        "gpuSettings": {
+            "enable_gpu": safe_get(legacySettings, "enable_gpu", True),
+            "force_cpu": safe_get(legacySettings, "force_cpu", False),
+            "gpu_device_id": safe_get(legacySettings, "gpu_device_id", 0),
+        },
     }
 
     return newSettings
+
+class GPUSettings(BaseSettings):
+    """GPU設定クラス"""
+    
+    def __init__(self, data: dict = None):
+        super().__init__(data)
+        self.enable_gpu = safe_get(data, "enable_gpu", True)
+        self.force_cpu = safe_get(data, "force_cpu", False)
+        self.gpu_device_id = safe_get(data, "gpu_device_id", 0)
+    
+    def validate(self) -> list[str]:
+        """GPU設定を検証する"""
+        errors = []
+        
+        if not isinstance(self.enable_gpu, bool):
+            errors.append("enable_gpu must be a boolean")
+        
+        if not isinstance(self.force_cpu, bool):
+            errors.append("force_cpu must be a boolean")
+        
+        if not isinstance(self.gpu_device_id, int) or self.gpu_device_id < 0:
+            errors.append("gpu_device_id must be a non-negative integer")
+        
+        return errors
     

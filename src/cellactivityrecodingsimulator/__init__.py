@@ -15,7 +15,10 @@ import importlib.metadata
 # from .main import main, run
 # from .carsIO import load_settings_from_json, load_units_from_json, load_contacts_from_json, save_data, load_noise_file, load_spike_templates
 
-__version__ = importlib.metadata.version("cellactivityrecodingsimulator")
+try:
+    __version__ = importlib.metadata.version("cellactivityrecodingsimulator")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "0.2.0"
 
 # __all__ = [
 #     'BaseObject',

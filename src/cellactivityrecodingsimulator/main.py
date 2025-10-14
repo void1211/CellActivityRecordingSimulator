@@ -15,6 +15,7 @@ from .Template import BaseTemplate
 from .tools import make_save_dir
 from .plot import plot_GTUnits, plot_Signals
 from .ProbeObject import ProbeObject
+from .gpu_utils import gpu_manager
 # ベースディレクトリを固定
 BASE_DIR = Path("simulations")
 TEST_DIR = Path("test")
@@ -147,6 +148,13 @@ def run(
         # 信号生成
         logging.info(f"=== 信号生成 ===")
         
+        # GPU情報を表示
+        device_info = gpu_manager.get_device_info()
+        if device_info["available"]:
+            logging.info(f"GPU使用: {device_info['name']} ({device_info['memory'] / (1024**3):.1f}GB)")
+        else:
+            logging.info("CPU使用: GPUが利用できません")
+        
         # 全ユニットのテンプレートを検証
         for i, unit in enumerate(gt_units.units):
             if not is_valid_template(unit):
@@ -155,13 +163,20 @@ def run(
         
         logging.info(f"全{len(gt_units.units)}ユニットのテンプレートを確認 - 正常")
         
+        # 各Unitのスパイク信号を生成
+        logging.info("各Unitのスパイク信号を生成中...")
+        for unit in tqdm(gt_units.units, total=len(gt_units.units), desc="Unit信号生成"):
+            unit.generate_spike_signal(settings)
+        
         # ノイズ信号の生成
         drift = DriftNoise.generate(settings)
         powerLineNoise = PowerLineNoise.generate(settings)
 
-        for contact in tqdm(probe.contacts, total=len(probe.contacts)):
+        # Contactの信号を生成
+        logging.info("Contactの信号を生成中...")
+        for contact in tqdm(probe.contacts, total=len(probe.contacts), desc="Contact信号生成"):
             for unit in gt_units.units:
-                contact.add_spikes(unit, settings)
+                contact.add_unit_spike_signal(unit, settings)
             
             contact.set_signal("drift", drift.signal)
             contact.set_signal("power", powerLineNoise.signal)

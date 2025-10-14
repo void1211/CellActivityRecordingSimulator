@@ -3,6 +3,7 @@ import numpy as np
 from .tools import filterSignal
 from .calculate import calculate_scaled_spike_amplitude, calculate_distance_two_objects
 from .Unit import Unit
+from .gpu_utils import calculate_distance_gpu, apply_attenuation_gpu, gpu_manager
 
 class Contact(BaseObject):
     def __init__(self):
@@ -107,8 +108,51 @@ class Contact(BaseObject):
         
         return sum(padded_signals)
 
+    def add_unit_spike_signal(self, unit: Unit, settings):
+        """Unitの独立したスパイク信号をContactの信号に追加する（GPU対応）"""
+        # Settingsオブジェクトの場合は辞書に変換
+        if hasattr(settings, 'to_dict'):
+            settings = settings.to_dict()
+        
+        # 信号が空の場合は初期化
+        if len(self.signal_spike) == 0:
+            duration_samples = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
+            signal = np.zeros(duration_samples, dtype=np.float64)
+        else:
+            signal = self.get_signal("spike").astype(np.float64)
+
+        # Unitのスパイク信号を取得
+        unit_spike_signal = unit.get_spike_signal()
+        if len(unit_spike_signal) == 0:
+            return  # Unitのスパイク信号が空の場合は何もしない
+        
+        # 距離に基づく減衰を計算（GPU対応）
+        if gpu_manager.is_gpu_available():
+            unit_pos = np.array([unit.x, unit.y, unit.z])
+            contact_pos = np.array([self.x, self.y, self.z])
+            distance = calculate_distance_gpu(unit_pos, contact_pos)
+            attenuated_signal = apply_attenuation_gpu(
+                unit_spike_signal, distance, settings["spikeSettings"]["attenTime"]
+            )
+        else:
+            # CPU版
+            distance = calculate_distance_two_objects(unit, self)
+            attenuation_factor = np.exp(-distance / settings["spikeSettings"]["attenTime"])
+            attenuated_signal = unit_spike_signal * attenuation_factor
+        
+        # 信号長を揃える
+        if len(attenuated_signal) < len(signal):
+            padded_signal = np.zeros_like(signal)
+            padded_signal[:len(attenuated_signal)] = attenuated_signal
+            attenuated_signal = padded_signal
+        elif len(attenuated_signal) > len(signal):
+            attenuated_signal = attenuated_signal[:len(signal)]
+        
+        signal += attenuated_signal
+        self.set_signal("spike", signal)
+    
     def add_spikes(self, unit: Unit, settings):
-        """スパイクを信号に追加する"""
+        """後方互換性のための古いメソッド（非推奨）"""
         # Settingsオブジェクトの場合は辞書に変換
         if hasattr(settings, 'to_dict'):
             settings = settings.to_dict()
