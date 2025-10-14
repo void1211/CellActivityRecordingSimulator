@@ -58,7 +58,7 @@
         },
         "truth":{
             "pathNoise": "test_example_condition1.noise",
-            "pathSites": "test_example_condition1.sites"
+            "pathContacts": "test_example_condition1.contacts"
         }
     },
     "driftSettings":{
