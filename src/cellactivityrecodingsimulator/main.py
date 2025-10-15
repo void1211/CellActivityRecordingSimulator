@@ -1,9 +1,28 @@
 import numpy as np
-from tqdm.notebook import tqdm
 import logging
 import argparse
 from pathlib import Path
 import time
+
+# 実行環境に応じて適切なtqdmをimport
+def get_tqdm():
+    """実行環境に応じて適切なtqdmを返す"""
+    try:
+        # IPython環境（Jupyter notebook）かどうかをチェック
+        # get_ipython()が存在し、IPython環境であることを確認
+        import builtins
+        if hasattr(builtins, 'get_ipython') and builtins.get_ipython() is not None:
+            from tqdm.notebook import tqdm
+            return tqdm
+        else:
+            from tqdm import tqdm
+            return tqdm
+    except (ImportError, AttributeError):
+        # CLI環境の場合
+        from tqdm import tqdm
+        return tqdm
+
+tqdm = get_tqdm()
 
 from probeinterface import Probe
 

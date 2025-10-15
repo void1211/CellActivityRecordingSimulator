@@ -5,8 +5,27 @@ from .calculate import calculate_scaled_spike_amplitude, calculate_distance_two_
 
 import numpy as np
 import logging
-from tqdm.notebook import tqdm
 import time
+
+# 実行環境に応じて適切なtqdmをimport
+def get_tqdm():
+    """実行環境に応じて適切なtqdmを返す"""
+    try:
+        # IPython環境（Jupyter notebook）かどうかをチェック
+        # get_ipython()が存在し、IPython環境であることを確認
+        import builtins
+        if hasattr(builtins, 'get_ipython') and builtins.get_ipython() is not None:
+            from tqdm.notebook import tqdm
+            return tqdm
+        else:
+            from tqdm import tqdm
+            return tqdm
+    except (ImportError, AttributeError):
+        # CLI環境の場合
+        from tqdm import tqdm
+        return tqdm
+
+tqdm = get_tqdm()
 
 class BGUnitsObject:
     def __init__(self):
@@ -105,8 +124,7 @@ class BGUnitsObject:
         contact_signal = np.zeros(duration_samples)
         
         added_spikes = 0
-        logging.info(f"=== ノイズ細胞活動追加 ===")
-        for unit_idx, unit in tqdm(enumerate(self.units), desc="ノイズ細胞活動追加中", total=len(self.units), position=1):
+        for unit_idx, unit in tqdm(enumerate(self.units), desc="ノイズ細胞活動追加中", total=len(self.units), position=1, leave=False):
             # 各細胞からの信号を計算
             distance = calculate_distance_two_objects(unit, contact)
             scaled_amps = calculate_scaled_spike_amplitude(
