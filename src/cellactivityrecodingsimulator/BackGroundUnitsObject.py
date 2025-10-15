@@ -5,7 +5,7 @@ from .calculate import calculate_scaled_spike_amplitude, calculate_distance_two_
 
 import numpy as np
 import logging
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 import time
 
 class BGUnitsObject:
@@ -150,8 +150,6 @@ class BGUnitsObject:
                 if unit_idx < 5:  # 最初の5個の細胞のみログ出力
                     distance = calculate_distance_two_objects(unit, contact)
                     logging.debug(f"  細胞{unit_idx}: 距離={distance:.2f}μm, 追加スパイク数={unit_added_spikes}")
-            
-            time.sleep(0.1)
         
         contact.set_signal("background", contact_signal)
         return contact

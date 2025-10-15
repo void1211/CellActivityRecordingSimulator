@@ -1,5 +1,5 @@
 import numpy as np
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 import logging
 import argparse
 from pathlib import Path
