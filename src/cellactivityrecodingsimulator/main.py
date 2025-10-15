@@ -69,36 +69,31 @@ def run(
         logging.info(f"=== ノイズ生成と記録点への適用 ===")
         if settings["noiseSettings"]["noiseType"] == "truth":
             logging.warning("truth noise type is not implemented")
-            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), position=0):
                 noise = RandomNoise.generate("normal", settings)
                 contact.set_signal("background", noise)
-                time.sleep(0.1)
 
         elif settings["noiseSettings"]["noiseType"] == "normal":  
-            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), position=0):
                 noise = RandomNoise.generate("normal", settings)
                 contact.set_signal("background", noise)
-                time.sleep(0.1)
 
         elif settings["noiseSettings"]["noiseType"] == "gaussian":
-            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), position=0):
                 noise = RandomNoise.generate("gaussian", settings)
                 contact.set_signal("background", noise)
-                time.sleep(0.1)
 
         elif settings["noiseSettings"]["noiseType"] == "model":
             # ノイズ細胞を生成してサイトに追加
             bg_units = BGUnitsObject.generate(settings, probe)
-            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), position=0):
                 bg_units.make_background_activity(contact, settings["spikeSettings"]["attenTime"], settings)
-                time.sleep(0.1)
 
         elif settings["noiseSettings"]["noiseType"] == "none":
             duration_samples = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
-            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), position=0):
                 contact.set_signal("background", np.zeros(duration_samples))
-                time.sleep(0.1)
-                
+
         else:
             noiseType = settings["noiseSettings"]["noiseType"]
             raise ValueError(f"Invalid noise type: {noiseType}")
@@ -167,7 +162,7 @@ def run(
         drift = DriftNoise.generate(settings)
         powerLineNoise = PowerLineNoise.generate(settings)
 
-        for contact in tqdm(probe.contacts, total=len(probe.contacts)):
+        for contact in tqdm(probe.contacts, desc="チャンネル信号生成中", total=len(probe.contacts), position=2):
             for unit in gt_units.units:
                 contact.add_spikes(unit, settings)
             
