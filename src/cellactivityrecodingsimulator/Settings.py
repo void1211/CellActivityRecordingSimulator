@@ -701,7 +701,7 @@ def default_settings() -> dict:
     default_settings ={
         "baseSettings":{
             "name": "default",
-            "pathSaveDir": "default",
+            "pathSaveDir": None,
             "fs": 30000,
             "duration": 10,
             "random_seed": 0,
