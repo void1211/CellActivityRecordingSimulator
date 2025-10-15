@@ -106,7 +106,7 @@ class BGUnitsObject:
         
         added_spikes = 0
         logging.info(f"=== ノイズ細胞活動追加 ===")
-        for unit_idx, unit in tqdm(enumerate(self.units), desc="ノイズ細胞活動追加中", total=len(self.units), leave=False, position=1):
+        for unit_idx, unit in tqdm(enumerate(self.units), desc="ノイズ細胞活動追加中", total=len(self.units), position=1):
             # 各細胞からの信号を計算
             distance = calculate_distance_two_objects(unit, contact)
             scaled_amps = calculate_scaled_spike_amplitude(
