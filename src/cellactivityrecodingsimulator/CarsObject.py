@@ -59,7 +59,7 @@ class CarsObject:
             # probe=probe,
         )
 
-    def save_npz(self, filepath: Path):
+    def save_npz(self, dir: Path, name: str="CARS.npz"):
         """
         CarsObjectをnpz形式で保存する
         
@@ -67,7 +67,7 @@ class CarsObject:
             filepath (Path): 保存先のファイルパス
         """
         data_dict = self.to_dict()       
-        np.savez(filepath, **data_dict)
+        np.savez(dir / name, **data_dict)
 
 
     @classmethod
