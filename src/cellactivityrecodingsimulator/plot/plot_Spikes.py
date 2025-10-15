@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-from numba.core.types import np_uint16
 import numpy as np
 from typing import List
 from ..Contact import Contact
