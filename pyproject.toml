@@ -1,6 +1,6 @@
 [project]
 name = "cellactivityrecodingsimulator"
-version = "0.2.0"
+version = "0.2.1"
 description = "Add your description here"
 authors = [
     { name = "void1211", email = "g2154488@cc.kyoto-su.ac.jp" }
