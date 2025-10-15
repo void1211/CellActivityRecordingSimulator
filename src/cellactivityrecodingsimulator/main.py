@@ -37,6 +37,7 @@ def init_run(settings: dict, dir: Path, verbose):
         
     saveDir = make_save_dir(pathSaveDir)
     settings["baseSettings"]["pathSaveDir"] = saveDir
+    return settings
 
 def run(
     dir: Path, 
@@ -60,7 +61,7 @@ def run(
         probe = ProbeObject.load(probe)
         logging.info(f"サイトデータ読み込み完了: {probe.get_contacts_num()} contacts")
 
-        init_run(settings, Path(dir), verbose) 
+        settings = init_run(settings, Path(dir), verbose) 
 
         # ノイズの適用
         logging.info(f"=== ノイズ生成と記録点への適用 ===")
@@ -168,10 +169,6 @@ def run(
 
         # データの保存
         logging.info(f"=== データの保存 ===")
-        if settings["baseSettings"]["pathSaveDir"] is None:
-            logging.error("保存先ディレクトリがNoneです")
-            return False
-        
         noise_units_list = bg_units.units if (settings["noiseSettings"]["noiseType"] == "model" and bg_units) else None
         save_data(settings["baseSettings"]["pathSaveDir"], gt_units.units, probe.contacts, noise_units=noise_units_list, fs=settings["baseSettings"]["fs"])
         logging.info(f"データ保存完了")
