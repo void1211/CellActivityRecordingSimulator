@@ -3,6 +3,8 @@ from tqdm import tqdm
 import logging
 import argparse
 from pathlib import Path
+import time
+
 from probeinterface import Probe
 
 from .GroundTruthUnitsObject import GTUnitsObject
@@ -70,28 +72,33 @@ def run(
             for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
                 noise = RandomNoise.generate("normal", settings)
                 contact.set_signal("background", noise)
+                time.sleep(0.1)
 
         elif settings["noiseSettings"]["noiseType"] == "normal":  
             for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
                 noise = RandomNoise.generate("normal", settings)
                 contact.set_signal("background", noise)
+                time.sleep(0.1)
 
         elif settings["noiseSettings"]["noiseType"] == "gaussian":
             for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
                 noise = RandomNoise.generate("gaussian", settings)
                 contact.set_signal("background", noise)
+                time.sleep(0.1)
 
         elif settings["noiseSettings"]["noiseType"] == "model":
             # ノイズ細胞を生成してサイトに追加
             bg_units = BGUnitsObject.generate(settings, probe)
             for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
                 bg_units.make_background_activity(contact, settings["spikeSettings"]["attenTime"], settings)
+                time.sleep(0.1)
 
         elif settings["noiseSettings"]["noiseType"] == "none":
             duration_samples = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
             for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
                 contact.set_signal("background", np.zeros(duration_samples))
-
+                time.sleep(0.1)
+                
         else:
             noiseType = settings["noiseSettings"]["noiseType"]
             raise ValueError(f"Invalid noise type: {noiseType}")
