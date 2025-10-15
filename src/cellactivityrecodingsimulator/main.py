@@ -67,29 +67,29 @@ def run(
         logging.info(f"=== ノイズ生成と記録点への適用 ===")
         if settings["noiseSettings"]["noiseType"] == "truth":
             logging.warning("truth noise type is not implemented")
-            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
                 noise = RandomNoise.generate("normal", settings)
                 contact.set_signal("background", noise)
 
         elif settings["noiseSettings"]["noiseType"] == "normal":  
-            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
                 noise = RandomNoise.generate("normal", settings)
                 contact.set_signal("background", noise)
 
         elif settings["noiseSettings"]["noiseType"] == "gaussian":
-            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
                 noise = RandomNoise.generate("gaussian", settings)
                 contact.set_signal("background", noise)
 
         elif settings["noiseSettings"]["noiseType"] == "model":
             # ノイズ細胞を生成してサイトに追加
             bg_units = BGUnitsObject.generate(settings, probe)
-            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num()):
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
                 bg_units.make_background_activity(contact, settings["spikeSettings"]["attenTime"], settings)
 
         elif settings["noiseSettings"]["noiseType"] == "none":
             duration_samples = int(settings["baseSettings"]["duration"] * settings["baseSettings"]["fs"])
-            for contact in probe.contacts:
+            for contact in tqdm(probe.contacts, desc="ノイズ割振中", total=probe.get_contacts_num(), leave=False):
                 contact.set_signal("background", np.zeros(duration_samples))
 
         else:
