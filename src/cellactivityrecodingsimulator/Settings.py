@@ -793,6 +793,11 @@ def default_settings() -> dict:
             "max_cosine_similarity": 0.95,
             "similarity_control_attempts": 100,
         },
+        "gpuSettings":{
+            "enable_gpu": True,
+            "force_cpu": False,
+            "gpu_device_id": 0,
+        },
     }
     return default_settings
 
